@@ -1,0 +1,67 @@
+VIBECODE NO LIMIT — HƯỚNG DẪN KHÁCH HÀNG
+================================================
+
+Bản này là bản chạy sẵn dành cho khách hàng.
+Bạn KHÔNG cần cài Node.js, npm hay source code VibeCode.
+
+1. MỞ VIBECODE
+- Windows 64-bit: nhấp đúp START-WINDOWS.bat
+- macOS: nhấp đúp START-MAC.command
+- Linux 64-bit: chạy ./START-LINUX.sh
+- Trình duyệt sẽ mở VibeCode tại http://127.0.0.1:3001/ui/
+
+2. KÍCH HOẠT BẢN QUYỀN
+- Mở trang "Bản quyền".
+- Sao chép mã máy và gửi cho người bán nếu license có khóa máy.
+- Dán License Key được cấp rồi bấm "Kích hoạt license".
+
+3. CHỌN DỰ ÁN
+- Vào "Kết nối ChatGPT".
+- Bấm "Mở thư mục…" và chọn project cần code.
+- Bấm "Dùng thư mục này".
+
+4. KẾT NỐI CHATGPT — CHỈ THIẾT LẬP 1 LẦN
+- OpenAI tunnel-client chính thức đã được đóng gói sẵn trong VibeCode; KHÔNG cần tải/cài riêng hoặc thêm PATH.
+- Tạo OpenAI Secure MCP Tunnel theo hướng dẫn ngay trong VibeCode.
+- Dán Tunnel ID + Runtime API Key rồi bấm "Kết nối OpenAI Tunnel" một lần.
+- VibeCode lưu hai giá trị này ở máy khách và tự khởi động lại Tunnel ở những lần mở sau.
+- Trên ChatGPT: bật Developer mode → Apps → Create → Connection = Tunnel.
+- Chọn hoặc dán Tunnel ID mà VibeCode hiển thị.
+
+5. SKILLS
+- Vào "Skills" để cài từ GitHub, chọn thư mục skill trên máy hoặc tạo skill riêng.
+
+6. CẬP NHẬT LÊN BẢN MỚI
+- Nếu menu "Hướng dẫn & Tải xuống" có nút "Tải bản mới", dùng đúng link do người bán cấu hình. Nếu không có, lấy ZIP mới trực tiếp từ người bán.
+- Tải ZIP VibeCode Customer mới từ nguồn chính thức của người bán.
+- Giải nén bản mới vào MỘT THƯ MỤC MỚI. Không chép đè trực tiếp lên thư mục bản cũ.
+- Windows: chạy UPDATE-WINDOWS.bat trong thư mục bản mới.
+- macOS: chạy UPDATE-MAC.command trong thư mục bản mới.
+- Linux: chạy ./UPDATE-LINUX.sh trong thư mục bản mới.
+- VibeCode tự sao lưu và chuyển sang bản mới: license đã kích hoạt, Workspace, Tunnel ID + Runtime API Key, MCP ngoài, lịch sử và cấu hình công cụ.
+- Nếu là lần cập nhật đầu từ một bản rất cũ, VibeCode có thể hỏi bạn chọn thư mục bản cũ một lần.
+- Trình cập nhật kiểm tra bộ khóa license và không cho cài nhầm bản cũ hơn khi nhận diện được phiên bản.
+- Sau khi chuyển dữ liệu, VibeCode tự khởi động bản mới và kiểm tra health. Nếu bản mới không chạy được, trình cập nhật giữ nguyên dữ liệu và mở lại bản cũ.
+- Nếu bản mới chạy được nhưng sau đó bạn phát hiện lỗi: Windows chạy ROLLBACK-WINDOWS.bat, macOS chạy ROLLBACK-MAC.command, Linux chạy ./ROLLBACK-LINUX.sh. VibeCode sẽ mở lại đúng thư mục phiên bản trước.
+- KHÔNG xóa thư mục bản cũ ngay. Dùng thử bản mới ổn định rồi mới chạy STOP ở bản cũ và xóa thư mục cũ.
+- Nếu đổi sang máy tính khác và license có khóa máy, hãy gửi mã máy mới cho người bán để cập nhật license trước khi dùng.
+- Nếu muốn cài sạch hoàn toàn, KHÔNG chạy UPDATE: dùng ZIP mới như bản cài mới rồi kích hoạt/cấu hình lại. Cách này không nhập lịch sử và cấu hình cũ.
+- Project/code của khách nằm ngoài thư mục ứng dụng nên trình cập nhật không chép đè, không xóa và không rollback project.
+
+7. GỠ / XÓA VIBECODE KHI KHÔNG DÙNG NỮA
+- VibeCode Customer là bản portable, không cài source code vào hệ thống.
+- Windows: nhấp đúp UNINSTALL-WINDOWS.bat.
+- macOS: mở UNINSTALL-MAC.command.
+- Linux: chạy ./UNINSTALL-LINUX.sh.
+- Trình gỡ cho chọn: chỉ xóa ứng dụng, hoặc xóa ứng dụng + toàn bộ log/backup/trạng thái VibeCode.
+- Cả hai lựa chọn đều KHÔNG xóa project/code của khách.
+- KHÔNG xóa thư mục project/code đã chọn trong VibeCode. Project của bạn nằm ngoài thư mục ứng dụng và không bị gỡ theo.
+- Nếu muốn xóa luôn kết nối ChatGPT/OpenAI: xóa hoặc ngắt app MCP trong ChatGPT, sau đó xóa Tunnel và thu hồi Runtime API Key trên OpenAI Platform nếu không còn sử dụng.
+- Nếu trước đây bạn tự cài tunnel-client riêng trên macOS bằng Homebrew và không còn cần nó, có thể gỡ riêng bằng: brew uninstall openai/tools/tunnel-client
+
+LƯU Ý
+- VibeCode chỉ mở giao diện quản lý trên máy của bạn (127.0.0.1).
+- Không chia sẻ License Key, Runtime API Key hay thư mục cấu hình cho người khác.
+- OpenAI tunnel-client là thành phần chính thức của OpenAI và được bundle kèm bản Customer.
+- Windows/Linux: tunnel runtime đi kèm chạy trực tiếp, không cần PATH.
+- macOS: nếu Gatekeeper chặn tunnel runtime đi kèm, dùng đường cài được OpenAI khuyến nghị: brew install openai/tools/tunnel-client. VibeCode sẽ tự nhận client trong PATH.

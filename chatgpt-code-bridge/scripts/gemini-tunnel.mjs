@@ -1,0 +1,11 @@
+import { spawn } from 'node:child_process';
+const port = Number(process.env.GEMINI_GATEWAY_PORT || 3212);
+if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('GEMINI_GATEWAY_PORT không hợp lệ.');
+console.log(`Tạo URL HTTPS public tạm thời cho cổng MCP OAuth http://127.0.0.1:${port}.`);
+console.log('Copy URL https://…trycloudflare.com vào mục Gemini Web trong Code Bridge rồi bật cổng Gemini.');
+console.log('Giữ terminal này mở. Ctrl+C để dừng URL public.');
+const child = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${port}`, '--protocol', 'http2'], { stdio: 'inherit', windowsHide: true });
+child.on('error', () => { console.error('Không chạy được cloudflared. Cài từ https://developers.cloudflare.com/tunnel/downloads/ rồi thử lại.'); process.exitCode = 1; });
+child.on('exit', code => { process.exitCode = code ?? 0; });
+process.on('SIGINT', () => child.kill('SIGTERM'));
+process.on('SIGTERM', () => child.kill('SIGTERM'));

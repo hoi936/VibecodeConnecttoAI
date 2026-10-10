@@ -1,0 +1,213 @@
+import express from 'express';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { readFile, writeFile, mkdir, realpath, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { randomBytes } from 'node:crypto';
+import { createTunnelManager } from './tunnel-manager.mjs';
+import { createLegacyBridge } from './legacy-bridge.mjs';
+import { createRemoteAccess } from './remote-access.mjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const port = Number(process.env.BRIDGE_PORT || 3210);
+const origin = `http://127.0.0.1:${port}`;
+const dataDir = process.env.BRIDGE_DATA_DIR || path.join(root, '.local');
+const csrf = randomBytes(24).toString('hex');
+await mkdir(dataDir, { recursive: true, mode: 0o700 });
+let config = { workspace: path.join(root, 'demo-project'), allowWrites: true, tunnelId: '', connectionMode: 'chatgpt', chatgptProfiles: [] };
+try { config = { ...config, ...JSON.parse(await readFile(path.join(dataDir, 'config.json'), 'utf8')) }; } catch (e) { if (e.code !== 'ENOENT') throw e; }
+if (!['chatgpt', 'gemini'].includes(config.connectionMode)) config.connectionMode = 'chatgpt';
+let client, tools = [], busy = 0, changing = false, connectionChanging = false, toolQueue = Promise.resolve();
+const events = [];
+function log(action, ok, detail = '') {
+  events.unshift({ time: new Date().toISOString(), action, ok, detail });
+  events.splice(100);
+}
+function availableTools(remoteAuth) { return tools.filter(t => (config.allowWrites && (!remoteAuth || remoteAuth.allowWrites)) || t.annotations?.readOnlyHint === true); }
+async function connect(workspace) {
+  const canonical = await realpath(workspace);
+  if (!(await stat(canonical)).isDirectory() || path.dirname(canonical) === canonical) throw new Error('Chọn một thư mục dự án hợp lệ.');
+  if (!existsSync(path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'))) throw new Error('Cần build Filesystem MCP trước: npm run build');
+  const next = new Client({ name: 'local-code-bridge', version: '0.3.0' });
+  const transport = new StdioClientTransport({ command: process.execPath, args: [path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'), canonical], stderr: 'pipe' });
+  let startupError = '';
+  transport.stderr?.on('data', chunk => { startupError = (startupError + chunk.toString()).slice(-3000); });
+  try {
+    await next.connect(transport);
+    const listed = await next.listTools();
+    const old = client;
+    client = next; tools = listed.tools; config.workspace = canonical;
+    if (old) await old.close();
+    log('workspace', true, canonical);
+  } catch (e) { await next.close().catch(() => {}); throw new Error(`${e.message}${startupError ? '\n' + startupError : ''}`); }
+}
+async function saveConfig() { await writeFile(path.join(dataDir, 'config.json'), JSON.stringify(config, null, 2), { mode: 0o600 }); }
+function normalizeArgs(args) {
+  const result = { ...args };
+  for (const key of ['path', 'source', 'destination']) if (typeof result[key] === 'string') result[key] = path.resolve(config.workspace, result[key]);
+  if (Array.isArray(result.paths)) result.paths = result.paths.map(p => path.resolve(config.workspace, p));
+  return result;
+}
+async function callTool(name, args = {}, remoteAuth) {
+  if (busy >= 100) throw new Error('Hàng đợi công cụ đã đầy. Thử lại sau.');
+  busy++;
+  const run = toolQueue.then(async () => {
+    if (changing || connectionChanging) throw new Error('Đang đổi dự án hoặc chế độ. Thử lại sau.');
+    if (remoteAuth) {
+      if (remoteAuth.provider !== config.connectionMode) throw new Error('Chế độ kết nối đã thay đổi.');
+      if (remoteAuth.workspace !== config.workspace) throw new Error('Workspace đã đổi. Cần kết nối lại.');
+      if (remoteAuth.provider === 'gemini') remote.validateGrant(remoteAuth.grantId);
+      else if (remoteAuth.id) tunnels.touch(remoteAuth.id);
+    }
+    if (!availableTools(remoteAuth).some(t => t.name === name)) throw new Error('Công cụ không có hoặc quyền ghi đang tắt.');
+    const action = remoteAuth ? `${remoteAuth.provider}:${name}` : name;
+    try {
+      const result = await client.callTool({ name, arguments: normalizeArgs(args) });
+      log(action, !result.isError, remoteAuth?.id || '');
+      return result;
+    } catch (e) { log(action, false); throw e; }
+  });
+  toolQueue = run.catch(() => {});
+  try { return await run; } finally { busy--; }
+}
+function tunnelPath() { return path.join(root, 'runtime', process.platform === 'win32' ? 'tunnel-client-runtime.exe' : 'tunnel-client-runtime'); }
+const tunnels = createTunnelManager({ binary: tunnelPath(), origin, cwd: root, profiles: config.chatgptProfiles, log });
+const legacy = createLegacyBridge(process.env.BRIDGE_LEGACY_URL, origin);
+await legacy.poll();
+if (legacy.list().some(p => p.state !== 'stopped')) config.connectionMode = 'chatgpt';
+const remote = createRemoteAccess({ getContext: () => ({ workspace: config.workspace, allowWrites: config.allowWrites }), handleMcp, log, port: Number(process.env.GEMINI_GATEWAY_PORT || 3212) });
+function connections() { return [...tunnels.list().map(p => ({ ...p, workspace: config.workspace })), ...legacy.list(), ...remote.status().connections]; }
+function connectionSummary() {
+  const all = connections(), now = Date.now();
+  return { total: all.length, ready: all.filter(p => ['ready', 'authorized'].includes(p.state)).length,
+    recent: all.filter(p => ['ready', 'authorized'].includes(p.state) && p.lastCallAt && now - Date.parse(p.lastCallAt) < 300000).length,
+    pending: remote.status().pending.length, accountCount: null };
+}
+function requireMode(mode) { if (config.connectionMode !== mode) throw new Error(`Hãy chuyển sang chế độ ${mode === 'chatgpt' ? 'ChatGPT' : 'Gemini'} trước.`); }
+async function connectionAction(fn) {
+  if (connectionChanging || changing || busy) throw new Error('Chờ thao tác hiện tại hoàn thành trước khi đổi kết nối.');
+  connectionChanging = true;
+  try { return await fn(); } finally { connectionChanging = false; }
+}
+const app = express();
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  if (![ `127.0.0.1:${port}`, `localhost:${port}` ].includes(req.headers.host)) return res.status(403).json({ error: 'Host không được phép.' });
+  const requestOrigin = `http://${req.headers.host}`;
+  if (req.headers.origin && req.headers.origin !== requestOrigin) return res.status(403).json({ error: 'Origin không được phép.' });
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.method !== 'GET' && req.headers['x-bridge-csrf'] !== csrf) return res.status(403).json({ error: 'Thiếu token bảo vệ thao tác local.' });
+  }
+  next();
+});
+app.use(express.json({ limit: '1mb' }));
+app.get('/health', (req, res) => res.json({ ok: true, mcp: !!client, tunnel: connections().find(p => p.provider === 'chatgpt' && p.state === 'ready') ? 'ready' : 'stopped' }));
+app.get('/api/status', (req, res) => res.json({ ...config, csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, gemini: remote.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp` }));
+app.post('/api/workspace', async (req, res) => {
+  if (busy || changing || connectionChanging) return res.status(409).json({ error: 'Chờ thao tác MCP hoàn thành trước khi đổi workspace.' });
+  changing = true;
+  try {
+    if (typeof req.body.path !== 'string' || !path.isAbsolute(req.body.path)) throw new Error('Nhập đường dẫn tuyệt đối đến dự án.');
+    await connect(req.body.path);
+    remote.revokeAll();
+    await saveConfig();
+    res.json({ ok: true, workspace: config.workspace });
+  } finally { changing = false; }
+});
+app.post('/api/permissions', async (req, res) => {
+  if (busy || changing || connectionChanging) return res.status(409).json({ error: 'Chờ thao tác hiện tại hoàn thành.' });
+  if (typeof req.body.allowWrites !== 'boolean') throw new Error('allowWrites phải là boolean.');
+  config.allowWrites = req.body.allowWrites; await saveConfig(); res.json({ ok: true });
+});
+app.post('/api/tool', async (req, res) => res.json(await callTool(req.body.name, req.body.arguments)));
+app.post('/api/mode', async (req, res) => res.json(await connectionAction(async () => {
+  const mode = req.body.mode;
+  if (!['chatgpt', 'gemini'].includes(mode)) throw new Error('Chế độ không hợp lệ.');
+  if (mode === config.connectionMode) return { ok: true, mode };
+  if (mode === 'gemini') { await tunnels.stopAll(); await legacy.stop(); }
+  else await remote.disable();
+  config.connectionMode = mode; await saveConfig(); log('mode', true, mode);
+  return { ok: true, mode };
+})));
+app.post('/api/gemini/enable', async (req, res) => res.json(await connectionAction(async () => {
+  requireMode('gemini');
+  const result = await remote.enable(req.body.publicOrigin);
+  config.geminiOrigin = result.publicOrigin; await saveConfig(); return result;
+})));
+app.post('/api/gemini/disable', async (req, res) => res.json(await connectionAction(async () => { await remote.disable(); return { ok: true }; })));
+app.post('/api/gemini/approve', (req, res) => { requireMode('gemini'); remote.approve(req.body.id, req.body.label); res.json({ ok: true }); });
+app.post('/api/gemini/deny', (req, res) => { remote.deny(req.body.id); res.json({ ok: true }); });
+app.post('/api/gemini/revoke', (req, res) => { if (req.body.id) remote.revoke(req.body.id); else remote.revokeAll(); res.json({ ok: true }); });
+app.post('/api/gemini/rename', (req, res) => { remote.rename(req.body.id, req.body.label); res.json({ ok: true }); });
+async function startTunnel(body) {
+  requireMode('chatgpt');
+  await legacy.poll();
+  if (legacy.list().some(p => p.tunnelId === body.tunnelId && p.state !== 'stopped')) throw new Error('Tunnel ID này đang được phiên cũ sử dụng.');
+  const result = await tunnels.start({ ...body, label: body.label || 'ChatGPT' });
+  config.chatgptProfiles = tunnels.savedProfiles(); config.tunnelId = body.tunnelId; await saveConfig(); return result;
+}
+app.post('/api/tunnel/start', async (req, res) => res.json(await connectionAction(() => startTunnel(req.body))));
+app.post('/api/tunnel/stop', async (req, res) => res.json(await connectionAction(async () => {
+  if (req.body.id === 'legacy-chatgpt') await legacy.stop();
+  else if (req.body.id) await tunnels.stop(req.body.id);
+  else await tunnels.stopAll();
+  return { ok: true };
+})));
+app.post('/api/tunnel/remove', async (req, res) => res.json(await connectionAction(async () => {
+  await tunnels.remove(req.body.id); config.chatgptProfiles = tunnels.savedProfiles(); await saveConfig(); return { ok: true };
+})));
+let healthPolling = false;
+const healthTimer = setInterval(async () => {
+  if (healthPolling) return;
+  healthPolling = true;
+  try {
+  await Promise.all([tunnels.poll(), legacy.poll()]);
+  // A user can reopen the previous dashboard. Keep this hub exclusive if that runtime restarts.
+  if (config.connectionMode === 'gemini' && legacy.list().some(p => ['ready', 'starting', 'connecting', 'stopping', 'unknown'].includes(p.state)) && !connectionChanging) {
+    connectionChanging = true;
+    try { await remote.disable(); config.connectionMode = 'chatgpt'; await saveConfig(); log('mode', true, 'Phiên ChatGPT cũ hoạt động trở lại'); }
+    finally { connectionChanging = false; }
+  }
+  } catch (e) { log('connections:health', false, e.message); } finally { healthPolling = false; }
+}, 2500);
+healthTimer.unref();
+
+async function handleMcp(req, res) {
+  const remoteAuth = req.bridgeSource === 'gemini' ? { ...req.auth.extra, provider: 'gemini' } : { provider: 'chatgpt', id: req.params.id, workspace: config.workspace, allowWrites: true };
+  requireMode(remoteAuth.provider);
+  if (connectionChanging) return res.status(409).json({ error: 'Đang chuyển chế độ.' });
+  if (remoteAuth.id) tunnels.touch(remoteAuth.id);
+  const server = new Server({ name: 'Local Code Bridge', version: '0.3.0' }, { capabilities: { tools: {} }, instructions: `Work only in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. This server does not run shell commands.` });
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: availableTools(remoteAuth) }));
+  server.setRequestHandler(CallToolRequestSchema, async r => callTool(r.params.name, r.params.arguments, remoteAuth));
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  res.on('close', () => { transport.close().catch(() => {}); server.close().catch(() => {}); });
+  await server.connect(transport);
+  await transport.handleRequest(req, res, req.body);
+}
+app.post('/mcp', handleMcp);
+app.post('/mcp/tunnels/:id', handleMcp);
+app.all('/mcp', (req, res) => res.status(405).set('Allow', 'POST').end());
+app.get('/preview/*path', async (req, res) => {
+  const relative = (req.params.path || []).join('/') || 'index.html';
+  if (relative.split('/').some(segment => segment.startsWith('.') || segment === 'node_modules')) return res.sendStatus(403);
+  const target = await realpath(path.resolve(config.workspace, relative));
+  if (!target.startsWith(config.workspace + path.sep)) return res.sendStatus(403);
+  res.setHeader('Content-Security-Policy', "sandbox allow-scripts; default-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'none'");
+  res.sendFile(target);
+});
+app.get('/preview', (req, res) => res.redirect('/preview/index.html'));
+app.use(express.static(path.join(root, 'public')));
+app.use((err, req, res, next) => { if (res.headersSent) return next(err); res.status(400).json({ error: err.message }); });
+await connect(config.workspace);
+const httpServer = app.listen(port, '127.0.0.1', () => console.log(`Code Bridge: ${origin}\nMCP: ${origin}/mcp\nWorkspace: ${config.workspace}`));
+async function shutdown() { clearInterval(healthTimer); await tunnels.close(); await remote.close(); await toolQueue; await client?.close(); httpServer.close(); }
+process.on('SIGINT', () => shutdown().then(() => process.exit(0)));
+process.on('SIGTERM', () => shutdown().then(() => process.exit(0)));

@@ -1,0 +1,12 @@
+# Node dependencies
+node_modules/
+
+# Local / build runtime caches
+.local/
+chatgpt-code-bridge/runtime/
+chatgpt-code-bridge/upstream/
+*.log
+
+# System files
+.DS_Store
+Thumbs.db

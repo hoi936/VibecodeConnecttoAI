@@ -1,0 +1,18 @@
+{
+  "name": "chatgpt-code-bridge",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "setup": "node scripts/setup.mjs",
+    "setup:tunnel": "node scripts/setup-tunnel.mjs",
+    "gemini:tunnel": "node scripts/gemini-tunnel.mjs",
+    "build": "npm run build --prefix upstream/mcp-servers/src/filesystem --workspaces=false",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.1.0"
+  }
+}
