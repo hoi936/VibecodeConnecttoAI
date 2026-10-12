@@ -8,6 +8,29 @@ async function api(url, body) {
   return result;
 }
 function resultText(result) { if (result.isError) throw new Error(result.content?.map(c => c.text || '').join('\n')); return result.content?.map(c => c.text || '').join('\n') || JSON.stringify(result, null, 2); }
+function renderQuickTunnel(provider, prefix, name) {
+  const quick = state.quickTunnels?.[provider] || { state: 'stopped' };
+  const active = ['installing', 'starting', 'ready'].includes(quick.state);
+  $(`start-${prefix}-quick`).disabled = active;
+  $(`start-${prefix}-quick`).textContent = quick.state === 'ready' ? `URL ${name} đang chạy` : quick.state === 'error' ? `Thử tạo lại URL ${name}` : `Tạo URL và kết nối ${name} ↗`;
+  $(`stop-${prefix}-quick`).disabled = !active;
+  const percent = quick.total ? Math.min(100, Math.round(100 * quick.downloaded / quick.total)) : null;
+  $(`${prefix}-quick-state`).textContent = ({
+    installing: percent === null ? 'Đang cài cloudflared từ bản phát hành chính thức…' : `Đang cài cloudflared · ${percent}%`,
+    starting: 'Đang tạo URL HTTPS và bật cổng MCP…',
+    ready: `URL đã sẵn sàng. Copy URL MCP ở bên phải để thêm vào ${name}.`,
+    error: quick.error || 'Không tạo được URL. Bấm thử lại.',
+    stopped: 'Chưa tạo URL. Bấm nút để bắt đầu.'
+  })[quick.state] || 'Đang xử lý…';
+  $(`${prefix}-quick-state`).classList.toggle('is-error', quick.state === 'error');
+  const bar = $(`${prefix}-quick-progress`);
+  bar.hidden = quick.state !== 'installing';
+  if (percent === null) bar.removeAttribute('value'); else { bar.max = 100; bar.value = percent; }
+  const origin = $(`${prefix}-quick-origin`);
+  origin.hidden = !quick.origin;
+  origin.textContent = quick.origin || '';
+  $(`enable-${prefix}`).disabled = active;
+}
 async function tool(name, args) { return api('/api/tool', { name, arguments: args }); }
 function protect(fn) { return async event => { event?.preventDefault(); const button = event?.submitter || (event?.currentTarget?.tagName === 'BUTTON' ? event.currentTarget : null); if (button?.disabled) return; if (button) button.disabled = true; try { await fn(event); } catch (e) { notify(e.message, true); } finally { if (button) button.disabled = false; } }; }
 async function refresh() {
@@ -55,6 +78,7 @@ async function refresh() {
 function renderGemini() {
   const gemini = state.gemini;
   if (!gemini) { $('gemini-status').textContent = 'Cần khởi động lại Code Bridge'; for (const button of $('gemini-setup').querySelectorAll('form button')) button.disabled = true; return; }
+  renderQuickTunnel('gemini', 'gemini', 'Gemini');
   const pendingCount = gemini.pending.length;
   const readOnlyCount = state.allowWrites ? gemini.connections.filter(connection => !connection.allowWrites).length : 0;
   $('gemini-regrant-help').hidden = readOnlyCount === 0;
@@ -92,8 +116,8 @@ function renderGemini() {
   }
 }
 const remoteSites = {
-  claude: { name: 'Claude', url: 'https://claude.ai/customize/connectors', command: 'npm run claude:tunnel', info: 'Claude Web: Customize → Connectors → + Add → Add custom connector. Nếu dùng Team/Enterprise, quản trị viên phải thêm connector trước.', steps: ['Mở Customize → Connectors → + Add → Add custom connector; nhập tên Code Bridge và dán URL MCP có đuôi /mcp.', 'Chọn Sign in now hoặc Sign in when needed. Ở OAuth client, chọn Register automatically để dùng đăng ký OAuth của Code Bridge. Hoàn tất Add rồi bấm Connect.', 'Khi trang xin quyền mở, đối chiếu mã ở Code Bridge và bấm Cho phép. Trong cuộc chat, bật connector bằng nút + → Connectors rồi thử đọc file.'] },
-  grok: { name: 'Grok', url: 'https://grok.com/connectors', command: 'npm run grok:tunnel', info: 'Grok Web: Connectors → New Connector → Custom. Tài khoản Business/Enterprise có thể cần quản trị viên cấp connector trước.', steps: ['Mở grok.com/connectors → New Connector → Custom; dán URL MCP có đuôi /mcp.', 'Hoàn tất bước xác thực OAuth nếu Grok yêu cầu. Khi trang xin quyền mở, đối chiếu mã ở Code Bridge và bấm Cho phép.', 'Trở lại cuộc trò chuyện Grok, bật connector Code Bridge và yêu cầu liệt kê thư mục được phép trước khi sửa file.'] }
+  claude: { name: 'Claude', url: 'https://claude.ai/customize/connectors', info: 'Claude Web: Customize → Connectors → + Add → Add custom connector. Nếu dùng Team/Enterprise, quản trị viên phải thêm connector trước.', steps: ['Mở Customize → Connectors → + Add → Add custom connector; nhập tên Code Bridge và dán URL MCP có đuôi /mcp.', 'Chọn Sign in now hoặc Sign in when needed. Ở OAuth client, chọn Register automatically để dùng đăng ký OAuth của Code Bridge. Hoàn tất Add rồi bấm Connect.', 'Khi trang xin quyền mở, đối chiếu mã ở Code Bridge và bấm Cho phép. Trong cuộc chat, bật connector bằng nút + → Connectors rồi thử đọc file.'] },
+  grok: { name: 'Grok', url: 'https://grok.com/connectors', info: 'Grok Web: Connectors → New Connector → Custom. Tài khoản Business/Enterprise có thể cần quản trị viên cấp connector trước.', steps: ['Mở grok.com/connectors → New Connector → Custom; dán URL MCP có đuôi /mcp.', 'Hoàn tất bước xác thực OAuth nếu Grok yêu cầu. Khi trang xin quyền mở, đối chiếu mã ở Code Bridge và bấm Cho phép.', 'Trở lại cuộc trò chuyện Grok, bật connector Code Bridge và yêu cầu liệt kê thư mục được phép trước khi sửa file.'] }
 };
 const remoteOriginDrafts = { claude: '', grok: '' };
 function renderOtherRemote() {
@@ -102,12 +126,13 @@ function renderOtherRemote() {
   $('remote-name-heading').textContent = site.name.toUpperCase();
   $('remote-name-title').textContent = site.name;
   $('remote-name-step').textContent = site.name.toUpperCase();
+  $('remote-name-action').textContent = site.name;
   $('remote-approval-name').textContent = site.name;
   $('remote-eligibility').textContent = site.info;
-  $('remote-tunnel-command').textContent = site.command;
   $('enable-remote').textContent = `Bật cổng ${site.name}`;
   $('remote-steps').replaceChildren(...site.steps.map(step => { const li = document.createElement('li'); li.textContent = step; return li; }));
   if (!remote) { $('remote-status').textContent = 'Cần khởi động lại Code Bridge'; for (const button of $('remote-form').querySelectorAll('button')) button.disabled = true; return; }
+  renderQuickTunnel(provider, 'remote', site.name);
   $('remote-status').textContent = remote.grantedCount ? `${remote.grantedCount} quyền đã cấp` : remote.enabled ? 'Cổng local đã bật' : 'Chưa bật';
   const pendingCount = remote.pending.length;
   $('remote-pending-inline').textContent = String(pendingCount);
@@ -170,7 +195,7 @@ $('cancel-reconnect').onclick = resetTunnelForm;
 function geminiOriginValue() {
   const value = $('gemini-origin').value.trim();
   let url;
-  try { url = new URL(value); } catch { throw new Error('URL HTTPS chưa hợp lệ. Hãy copy nguyên URL https://… từ terminal tunnel.'); }
+  try { url = new URL(value); } catch { throw new Error('URL HTTPS riêng chưa hợp lệ. Hãy nhập URL gốc https://…'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !['/', '/mcp', '/mcp/'].includes(url.pathname)) throw new Error('Nhập URL HTTPS gốc, ví dụ https://abc.trycloudflare.com, không thêm đường dẫn khác.');
   return { origin: url.origin, wasMcp: url.pathname.startsWith('/mcp') };
 }
@@ -193,7 +218,8 @@ $('gemini-form').onsubmit = protect(async () => {
 });
 $('disable-gemini').onclick = protect(async () => { await api('/api/gemini/disable', {}); await refresh(); notify('Đã tắt cổng Gemini và thu hồi quyền truy cập.'); });
 $('revoke-gemini').onclick = protect(async () => { await api('/api/gemini/revoke', {}); await refresh(); notify('Đã thu hồi toàn bộ quyền Gemini.'); });
-$('copy-gemini-command').onclick = protect(async () => { await navigator.clipboard.writeText('npm run gemini:tunnel'); notify('Đã copy lệnh tạo URL.'); });
+$('start-gemini-quick').onclick = protect(async () => { await api('/api/gemini/quick-tunnel/start', {}); await refresh(); notify('Đang cài hoặc khởi động tunnel. URL MCP sẽ hiện trên trang.'); });
+$('stop-gemini-quick').onclick = protect(async () => { await api('/api/gemini/quick-tunnel/stop', {}); await refresh(); notify('Đã dừng URL Gemini và thu hồi quyền đang dùng.'); });
 $('copy-gemini-endpoint').onclick = protect(async () => { await navigator.clipboard.writeText(state.gemini.endpoint); notify('Đã copy URL có /mcp. Dán URL này vào “URL của máy chủ MCP” trong Gemini.'); });
 $('jump-gemini-approval').onclick = () => $('approval-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 $('copy-gemini-prompt').onclick = protect(async () => { await navigator.clipboard.writeText('Hãy dùng Code Bridge để liệt kê các thư mục được phép và đọc index.html trong dự án. Chưa sửa file.'); notify('Đã copy câu thử đọc file cho Gemini.'); });
@@ -202,7 +228,7 @@ $('remote-form').onsubmit = protect(async () => {
   const provider = selectedProvider, site = remoteSites[provider];
   if (!site) return;
   let url;
-  try { url = new URL($('remote-origin').value.trim()); } catch { throw new Error('Hãy copy nguyên URL HTTPS từ terminal tunnel.'); }
+  try { url = new URL($('remote-origin').value.trim()); } catch { throw new Error('URL HTTPS riêng chưa hợp lệ. Hãy nhập URL gốc https://…'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !['/', '/mcp', '/mcp/'].includes(url.pathname)) throw new Error('Nhập URL HTTPS gốc hoặc URL MCP có đuôi /mcp.');
   const origin = url.origin;
   $('remote-origin').value = origin; remoteOriginDrafts[provider] = origin;
@@ -212,7 +238,8 @@ $('remote-form').onsubmit = protect(async () => {
 });
 $('disable-remote').onclick = protect(async () => { const provider = selectedProvider; await api(`/api/${provider}/disable`, {}); await refresh(); notify(`Đã tắt cổng ${remoteSites[provider].name} và thu hồi quyền.`); });
 $('revoke-remote').onclick = protect(async () => { const provider = selectedProvider; await api(`/api/${provider}/revoke`, {}); await refresh(); notify(`Đã thu hồi toàn bộ quyền ${remoteSites[provider].name}.`); });
-$('copy-remote-command').onclick = protect(async () => { await navigator.clipboard.writeText(remoteSites[selectedProvider].command); notify('Đã copy lệnh tạo URL.'); });
+$('start-remote-quick').onclick = protect(async () => { const provider = selectedProvider; await api(`/api/${provider}/quick-tunnel/start`, {}); await refresh(); notify('Đang cài hoặc khởi động tunnel. URL MCP sẽ hiện trên trang.'); });
+$('stop-remote-quick').onclick = protect(async () => { const provider = selectedProvider; await api(`/api/${provider}/quick-tunnel/stop`, {}); await refresh(); notify(`Đã dừng URL ${remoteSites[provider].name} và thu hồi quyền đang dùng.`); });
 $('copy-remote-endpoint').onclick = protect(async () => { await navigator.clipboard.writeText(state[selectedProvider].endpoint); notify('Đã copy URL MCP có /mcp.'); });
 $('jump-remote-approval').onclick = () => $('remote-approval-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 $('copy-remote-prompt').onclick = protect(async () => { await navigator.clipboard.writeText('Hãy dùng Code Bridge để liệt kê các thư mục được phép và đọc index.html trong dự án. Chưa sửa file.'); notify('Đã copy câu thử đọc file.'); });
@@ -301,7 +328,7 @@ function renderHub() {
   $('use-intro').textContent = `Sau khi kết nối, bạn ra lệnh trong ${name} và quản lý file tại Code Bridge.`;
   $('use-select').textContent = selectedProvider === 'chatgpt' ? 'Trong ChatGPT, chọn custom app Code Bridge đã thiết lập bằng Tunnel ID của bạn.' : selectedProvider === 'gemini' ? 'Trong Gemini, nhập @ và chọn custom app Code Bridge bạn đã thêm.' : `Trong ${name}, bật connector Code Bridge trong cuộc trò chuyện.`;
   $('use-prompt').textContent = selectedProvider === 'chatgpt' ? 'Hãy dùng Code Bridge để liệt kê thư mục được phép và đọc index.html trong dự án. Đề xuất một thay đổi nhỏ rồi dùng edit_file với dryRun=true để xem diff trước khi áp dụng.' : 'Hãy dùng Code Bridge để liệt kê các thư mục được phép và đọc index.html trong dự án. Chưa sửa file.';
-  $('provider-troubleshooting').textContent = selectedProvider === 'chatgpt' ? 'Nếu tunnel chưa sẵn sàng, kiểm tra Tunnel ID, Runtime API Key và thông báo trong Quản lý kết nối.' : 'Nếu URL không hợp lệ, hãy dán URL có đuôi /mcp. Nếu báo 502, giữ terminal tunnel mở và bật cổng. Nếu xác thực chờ, quay lại Code Bridge để duyệt yêu cầu cùng mã.';
+  $('provider-troubleshooting').textContent = selectedProvider === 'chatgpt' ? 'Nếu tunnel chưa sẵn sàng, kiểm tra Tunnel ID, Runtime API Key và thông báo trong Quản lý kết nối.' : 'Nếu URL không hợp lệ, hãy dán URL có đuôi /mcp. Nếu báo 502, kiểm tra trạng thái URL tự động và tạo lại khi tunnel đã ngắt. Nếu xác thực chờ, quay lại Code Bridge để duyệt yêu cầu cùng mã.';
   renderConnections();
 }
 function renderConnections() {

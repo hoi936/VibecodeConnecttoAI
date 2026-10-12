@@ -1,4 +1,4 @@
-# Code Bridge 0.3 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
+# Code Bridge 0.3.1 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
 
 Ứng dụng local cho mô hình **ChatGPT Web → OpenAI Secure MCP Tunnel → Filesystem MCP → workspace trên máy**.
 
@@ -72,8 +72,8 @@ bash START-BRIDGE-LINUX.sh
 Mở **http://127.0.0.1:3213** và chọn ô **Gemini**; có thể giữ các tunnel ChatGPT đang chạy. Script dùng config riêng tại `.local/gemini-preview/`. Windows native có `START-BRIDGE-WINDOWS.bat` nhưng chưa được kiểm thử; môi trường hiện tại là WSL/Linux.
 
 1. Chọn workspace trên dashboard.
-2. Cài `cloudflared` từ https://developers.cloudflare.com/tunnel/downloads/ nếu chưa có. Mở terminal thứ hai trong thư mục ứng dụng và chạy `npm run gemini:tunnel`. Lệnh này **tạo URL public** cho cổng MCP 3212; nó chỉ chạy khi bạn chủ động gọi.
-3. Copy URL `https://…trycloudflare.com` mà lệnh in ra, nhập vào mục Gemini Web và bấm **Bật cổng Gemini**. Cổng 3212 chỉ có MCP/OAuth; không trỏ tunnel vào cổng dashboard 3210/3213.
+2. Bấm **Tạo URL và kết nối Gemini**. Code Bridge tự cài cloudflared từ bản phát hành chính thức nếu cần, kiểm tra SHA-256, chạy Quick Tunnel và bật cổng MCP/OAuth 3212. URL chỉ được tạo sau khi bạn bấm nút; không trỏ tunnel vào dashboard 3210/3213.
+3. Chờ giao diện báo URL sẵn sàng. Nếu đã có domain HTTPS hoặc tunnel riêng, dùng mục **Dùng URL HTTPS riêng (nâng cao)**.
 4. Copy URL MCP hiển thị, thêm vào Custom apps của Gemini. Khi trang xác thực xuất hiện, giữ trang đó mở, quay lại dashboard → **Yêu cầu kết nối**, đối chiếu mã và callback URL, bấm **Cho phép**. Tên ứng dụng là thông tin do client tự khai báo, không phải chứng nhận của Google.
 5. Trang xác thực tự trở lại Gemini. Dùng `@` chọn app rồi thử yêu cầu đọc file. Nút **Thu hồi toàn bộ quyền** hủy các token hiện tại; **Tắt** đóng cổng Gemini.
 
@@ -85,17 +85,17 @@ OAuth của bridge dùng SDK MCP: discovery metadata, DCR, Authorization Code + 
 
 ## Kết nối Claude Web và Grok Web
 
-Từ trang chủ chọn **Claude** hoặc **Grok**. Hai dịch vụ dùng cổng OAuth/MCP riêng (`3214` và `3215`) và lệnh `npm run claude:tunnel` hoặc `npm run grok:tunnel`. Dán URL HTTPS gốc từ terminal vào Code Bridge, bật cổng, rồi copy URL MCP có `/mcp` sang connector trên website. Duyệt yêu cầu OAuth tại trang quản lý tương ứng. Xem [hướng dẫn từng bước](docs/HUONG_DAN_CLAUDE_GROK_META.md). Cổng Gemini hiện có trên `3212` và tunnel ChatGPT vẫn độc lập.
+Từ trang chủ chọn **Claude** hoặc **Grok**, rồi bấm **Tạo URL và kết nối**. Code Bridge tự chạy tunnel đến cổng OAuth/MCP riêng (`3214` và `3215`); copy URL MCP có `/mcp` sang connector trên website. Duyệt yêu cầu OAuth tại trang quản lý tương ứng. Xem [hướng dẫn từng bước](docs/HUONG_DAN_CLAUDE_GROK_META.md). Cổng Gemini hiện có trên `3212` và tunnel ChatGPT vẫn độc lập.
 
 **Meta AI:** ô Meta chỉ hiển thị tình trạng developer preview và tài liệu chính thức; chưa có kết nối Meta AI Web qua URL MCP công khai.
 
 ### Khi kết nối chưa hoạt động
 
 - **Không có Custom apps:** kiểm tra điều kiện tài khoản trong tài liệu Google ở trên. Bridge chỉ sử dụng được luồng Gemini Web khi Google cấp tính năng này cho tài khoản.
-- **URL tunnel báo 502:** giữ terminal `gemini:tunnel` mở, nhập đúng URL HTTPS vào dashboard và bật cổng Gemini. Tunnel cần trỏ tới địa chỉ “Cổng đích” hiển thị trên giao diện.
+- **URL tunnel báo 502:** xem trạng thái URL tự động trên trang Gemini và bấm tạo lại nếu tunnel đã ngắt. Nếu dùng URL riêng, kiểm tra reverse proxy trỏ đúng “Cổng đích” hiển thị trên giao diện.
 - **Trang xác thực đang chờ:** để trang đó mở, duyệt yêu cầu có cùng mã tại dashboard. Yêu cầu hết hạn sau 5 phút; bắt đầu lại từ Gemini nếu đã hết hạn.
 - **Lệnh bị từ chối sau khi đổi dự án hoặc khởi động lại:** kết nối lại custom app từ Gemini để cấp quyền mới. Kiểm tra “Cho phép sửa file” nếu cần ghi; kết nối được cấp quyền chỉ đọc cần được cấp lại quyền để ghi.
-- **Cổng đã được sử dụng:** mở lại dashboard đang chạy thay vì mở thêm cùng một phiên. Nếu dùng cổng MCP khác, đặt cùng giá trị `GEMINI_GATEWAY_PORT` cho cả tiến trình bridge và terminal chạy `gemini:tunnel`.
+- **Cổng đã được sử dụng:** mở lại dashboard đang chạy thay vì mở thêm cùng một phiên. Nếu dùng cổng MCP khác, đặt `GEMINI_GATEWAY_PORT` trước khi chạy Code Bridge; nút tự động sẽ dùng đúng cổng đó.
 
 ## Chức năng
 

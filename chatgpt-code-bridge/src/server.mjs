@@ -12,6 +12,7 @@ import { randomBytes } from 'node:crypto';
 import { createTunnelManager } from './tunnel-manager.mjs';
 import { createLegacyBridge } from './legacy-bridge.mjs';
 import { createRemoteAccess } from './remote-access.mjs';
+import { createQuickTunnelManager } from './quick-tunnel-manager.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.BRIDGE_PORT || 3210);
@@ -33,7 +34,7 @@ async function connect(workspace) {
   const canonical = await realpath(workspace);
   if (!(await stat(canonical)).isDirectory() || path.dirname(canonical) === canonical) throw new Error('Chọn một thư mục dự án hợp lệ.');
   if (!existsSync(path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'))) throw new Error('Cần build Filesystem MCP trước: npm run build');
-  const next = new Client({ name: 'local-code-bridge', version: '0.3.0' });
+  const next = new Client({ name: 'local-code-bridge', version: '0.3.1' });
   const transport = new StdioClientTransport({ command: process.execPath, args: [path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'), canonical], stderr: 'pipe' });
   let startupError = '';
   transport.stderr?.on('data', chunk => { startupError = (startupError + chunk.toString()).slice(-3000); });
@@ -79,6 +80,20 @@ const tunnels = createTunnelManager({ binary: tunnelPath(), origin, cwd: root, p
 const legacy = createLegacyBridge(process.env.BRIDGE_LEGACY_URL, origin);
 await legacy.poll();
 const remotes = Object.fromEntries(Object.entries({ gemini: ['GEMINI_GATEWAY_PORT', 3212], claude: ['CLAUDE_GATEWAY_PORT', 3214], grok: ['GROK_GATEWAY_PORT', 3215] }).map(([providerName, [envName, defaultPort]]) => [providerName, createRemoteAccess({ getContext: () => ({ workspace: config.workspace, allowWrites: config.allowWrites }), handleMcp, log, providerName, port: Number(process.env[envName] || defaultPort) })]));
+const quickTunnels = createQuickTunnelManager({ root, dataDir,
+  ports: { gemini: Number(process.env.GEMINI_GATEWAY_PORT || 3212), claude: Number(process.env.CLAUDE_GATEWAY_PORT || 3214), grok: Number(process.env.GROK_GATEWAY_PORT || 3215) },
+  enable: (name, origin) => connectionAction(async () => {
+    await remotes[name].enable(origin);
+    config[`${name}Origin`] = origin;
+    await saveConfig();
+    log(`${name}:quick-tunnel`, true, origin);
+  }),
+  disable: async name => {
+    await remotes[name].disable();
+    delete config[`${name}Origin`];
+    await saveConfig();
+  }
+});
 function connections() {
   const current = tunnels.list().map(p => ({ ...p, workspace: config.workspace }));
   const old = legacy.list().filter(p => p.state !== 'offline' || !current.some(t => t.tunnelId === p.tunnelId));
@@ -110,7 +125,7 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.get('/health', (req, res) => res.json({ ok: true, mcp: !!client, tunnel: connections().find(p => p.provider === 'chatgpt' && p.state === 'ready') ? 'ready' : 'stopped' }));
-app.get('/api/status', (req, res) => res.json({ ...config, connectionMode: 'both', csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp` }));
+app.get('/api/status', (req, res) => res.json({ ...config, connectionMode: 'both', csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp` }));
 app.post('/api/connections/check', async (req, res) => {
   await Promise.all([tunnels.poll(), legacy.poll()]);
   res.json({ ok: true, connections: connections(), summary: connectionSummary() });
@@ -135,11 +150,14 @@ app.post('/api/tool', async (req, res) => res.json(await callTool(req.body.name,
 // Keep the old endpoint harmless for clients that have not reloaded the dashboard yet.
 app.post('/api/mode', (req, res) => res.json({ ok: true, mode: 'both' }));
 for (const [name, remote] of Object.entries(remotes)) {
+  app.post(`/api/${name}/quick-tunnel/start`, (req, res) => res.json(quickTunnels.start(name)));
+  app.post(`/api/${name}/quick-tunnel/stop`, async (req, res) => res.json(await quickTunnels.stop(name)));
   app.post(`/api/${name}/enable`, async (req, res) => res.json(await connectionAction(async () => {
+    if (['installing', 'starting', 'ready'].includes(quickTunnels.status()[name].state)) throw new Error('Dừng URL tự động trước khi dùng URL HTTPS riêng.');
     const result = await remote.enable(req.body.publicOrigin);
     config[`${name}Origin`] = result.publicOrigin; await saveConfig(); return result;
   })));
-  app.post(`/api/${name}/disable`, async (req, res) => res.json(await connectionAction(async () => { await remote.disable(); return { ok: true }; })));
+  app.post(`/api/${name}/disable`, async (req, res) => res.json(await connectionAction(async () => { await quickTunnels.stop(name); await remote.disable(); return { ok: true }; })));
   app.post(`/api/${name}/approve`, (req, res) => { remote.approve(req.body.id, req.body.label); res.json({ ok: true }); });
   app.post(`/api/${name}/deny`, (req, res) => { remote.deny(req.body.id); res.json({ ok: true }); });
   app.post(`/api/${name}/revoke`, (req, res) => { if (req.body.id) remote.revoke(req.body.id); else remote.revokeAll(); res.json({ ok: true }); });
@@ -175,7 +193,7 @@ async function handleMcp(req, res) {
   const remoteAuth = remotes[req.bridgeSource] ? { ...req.auth.extra, provider: req.bridgeSource } : { provider: 'chatgpt', id: req.params.id, workspace: config.workspace, allowWrites: true };
   if (connectionChanging) return res.status(409).json({ error: 'Đang thay đổi kết nối.' });
   if (remoteAuth.id) tunnels.touch(remoteAuth.id);
-  const server = new Server({ name: 'Local Code Bridge', version: '0.3.0' }, { capabilities: { tools: {} }, instructions: `Work only in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. This server does not run shell commands.` });
+  const server = new Server({ name: 'Local Code Bridge', version: '0.3.1' }, { capabilities: { tools: {} }, instructions: `Work only in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. This server does not run shell commands.` });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: availableTools(remoteAuth) }));
   server.setRequestHandler(CallToolRequestSchema, async r => callTool(r.params.name, r.params.arguments, remoteAuth));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
@@ -199,6 +217,6 @@ app.use(express.static(path.join(root, 'public')));
 app.use((err, req, res, next) => { if (res.headersSent) return next(err); res.status(400).json({ error: err.message }); });
 await connect(config.workspace);
 const httpServer = app.listen(port, '127.0.0.1', () => console.log(`Code Bridge: ${origin}\nMCP: ${origin}/mcp\nWorkspace: ${config.workspace}`));
-async function shutdown() { clearInterval(healthTimer); await tunnels.close(); await Promise.all(Object.values(remotes).map(remote => remote.close())); await toolQueue; await client?.close(); httpServer.close(); }
+async function shutdown() { clearInterval(healthTimer); await tunnels.close(); await quickTunnels.close(); await Promise.all(Object.values(remotes).map(remote => remote.close())); await toolQueue; await client?.close(); httpServer.close(); }
 process.on('SIGINT', () => shutdown().then(() => process.exit(0)));
 process.on('SIGTERM', () => shutdown().then(() => process.exit(0)));

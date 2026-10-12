@@ -32,6 +32,16 @@ body{background:#f6f7fa}aside{background:#18201f}nav a[aria-current=page]{backgr
 #gemini-form input{margin:0}
 .gemini-origin-feedback{margin:6px 0 15px}
 .gemini-origin-feedback.is-error{color:#b45b50}
+.quick-tunnel-card{display:grid;gap:12px;margin:19px 0 16px;padding:19px;border:1px solid #dcd5eb;border-radius:13px;background:linear-gradient(135deg,#fbf8ff,#f8faf7)}
+.quick-tunnel-card .row{flex-wrap:wrap}
+.quick-tunnel-state{margin:0;color:#6e6381;font-size:11px;line-height:1.7}
+.quick-tunnel-state.is-error{color:#ae514a}
+.quick-tunnel-card progress{width:100%;height:9px;accent-color:#8875b5}
+.quick-tunnel-card code{display:block;padding:10px 12px;border:1px solid #e2dcec;border-radius:8px;background:#fff;color:#5a4d6c;font-size:11px;word-break:break-all;user-select:all}
+.quick-tunnel-card [hidden]{display:none}
+.manual-tunnel{margin:12px 0 19px;padding:12px 14px;border:1px solid #e5e7e5;border-radius:10px;background:#fcfdfb}
+.manual-tunnel summary{color:#6b776f;font-size:11px;font-weight:650;cursor:pointer}
+.manual-tunnel>p{margin:12px 0 4px;font-size:11px}
 .gemini-url-card{display:grid;gap:11px;margin:13px 0 22px;padding:17px;border:1px solid #dcd2ed;border-radius:12px;background:#f8f5fd}
 .gemini-url-card strong{color:#765d98;font-size:10px;letter-spacing:.9px}
 .gemini-url-card code{display:block;padding:11px;border:1px solid #e2dcec;border-radius:8px;background:#fff;color:#55476b;font-size:12px;line-height:1.7;user-select:all;word-break:break-all}

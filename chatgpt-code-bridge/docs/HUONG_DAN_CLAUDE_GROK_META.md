@@ -5,23 +5,23 @@ Code Bridge dùng cùng một workspace cho ChatGPT, Gemini, Claude và Grok. Cl
 ## Chuẩn bị chung
 
 1. Khởi động Code Bridge như bình thường và mở giao diện local `http://127.0.0.1:3213`. Chọn đúng dự án ở **Dự án & file**; nếu chỉ muốn thử đọc, tắt **Cho phép sửa file** trước khi duyệt quyền.
-2. Cài `cloudflared` theo [hướng dẫn Cloudflare](https://developers.cloudflare.com/tunnel/downloads/). Giữ ứng dụng Code Bridge chạy trong suốt phiên kết nối.
-3. Chọn ô **Claude** hoặc **Grok** trên trang chủ và làm theo hai cột hướng dẫn. Mỗi dịch vụ cần một terminal tunnel riêng nếu bạn muốn dùng đồng thời.
+2. Giữ ứng dụng Code Bridge chạy trong suốt phiên kết nối. Nút **Tạo URL và kết nối** sẽ tự cài cloudflared từ bản phát hành chính thức nếu máy chưa có bản đi kèm, sau khi kiểm tra SHA-256.
+3. Chọn ô **Claude** hoặc **Grok** trên trang chủ và làm theo hai cột hướng dẫn. Mỗi dịch vụ có một tunnel riêng; có thể bật đồng thời ngay trong giao diện.
 
 ## Claude Web
 
-1. Trong terminal thứ hai, tại thư mục `chatgpt-code-bridge`, chạy `npm run claude:tunnel`. Copy URL gốc dạng `https://abc.trycloudflare.com` mà terminal in ra. Giữ terminal mở.
-2. Dán URL gốc vào ô **URL HTTPS gốc** trong không gian Claude của Code Bridge rồi bấm **Bật cổng Claude**. Code Bridge sẽ hiện **URL MCP** dạng `https://abc.trycloudflare.com/mcp`. Bấm **Copy URL MCP**.
+1. Trong không gian Claude, bấm **Tạo URL và kết nối Claude** rồi chờ URL HTTPS sẵn sàng. Code Bridge tự chạy tunnel và bật cổng Claude.
+2. Bấm **Copy URL MCP** ở cột bên phải. URL có dạng `https://abc.trycloudflare.com/mcp`. Nếu dùng domain hoặc reverse proxy riêng, mở mục **Dùng URL HTTPS riêng (nâng cao)**.
 3. Trên [Claude → Customize → Connectors](https://claude.ai/customize/connectors), chọn **+ Add → Add custom connector**. Nhập tên, dán URL MCP có `/mcp`, rồi tiếp tục. Với Team/Enterprise, chủ sở hữu tổ chức phải thêm connector ở Organization Settings trước.
-4. Chọn **Sign in now** hoặc **Sign in when needed**. Ở mục OAuth client, chọn **Register automatically** để Claude đăng ký với cổng OAuth của Code Bridge. Hoàn tất Add rồi Connect. Nếu Claude báo không đăng ký được OAuth, kiểm tra terminal tunnel, URL MCP và cổng đang bật trước khi thử lại.
+4. Chọn **Sign in now** hoặc **Sign in when needed**. Ở mục OAuth client, chọn **Register automatically** để Claude đăng ký với cổng OAuth của Code Bridge. Hoàn tất Add rồi Connect. Nếu Claude báo không đăng ký được OAuth, kiểm tra trạng thái URL tự động và URL MCP trước khi thử lại.
 5. Khi trang xin quyền mở, giữ trang đó. Trở lại Code Bridge → Claude → **Yêu cầu kết nối**, đối chiếu mã yêu cầu và địa chỉ trả về, đặt tên để nhận biết rồi bấm **Cho phép**. Trở lại Claude; trong cuộc chat bật connector qua nút **+ → Connectors**. Thử yêu cầu: “Hãy dùng Code Bridge để liệt kê các thư mục được phép và đọc index.html trong dự án. Chưa sửa file.”
 
 [Tài liệu chính thức của Anthropic](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) mô tả Custom connector qua remote MCP; tài khoản Free có giới hạn một custom connector. Cổng phải truy cập được từ hạ tầng Claude trên Internet.
 
 ## Grok Web
 
-1. Trong terminal riêng, chạy `npm run grok:tunnel`. Copy URL HTTPS gốc. Giữ terminal mở.
-2. Dán URL gốc vào ô **URL HTTPS gốc** trong không gian Grok của Code Bridge rồi bấm **Bật cổng Grok**. Copy URL MCP có `/mcp` từ bảng bên phải.
+1. Trong không gian Grok, bấm **Tạo URL và kết nối Grok** rồi chờ URL HTTPS sẵn sàng.
+2. Copy URL MCP có `/mcp` từ bảng bên phải. Nếu dùng URL HTTPS riêng, nhập trong mục **Dùng URL HTTPS riêng (nâng cao)**.
 3. Mở [Grok Connectors](https://grok.com/connectors) → **New Connector → Custom**. Dán URL MCP và hoàn tất bước xác thực mà Grok yêu cầu. Với Grok Business/Enterprise, quản trị viên có thể phải cấp connector trước.
 4. Nếu trang xin quyền mở, đối chiếu mã và địa chỉ trả về trong Code Bridge → Grok → **Yêu cầu kết nối**, rồi duyệt. Trở lại cuộc chat Grok, bật connector và thử đọc file như ví dụ ở trên.
 
@@ -33,7 +33,7 @@ Code Bridge dùng cùng một workspace cho ChatGPT, Gemini, Claude và Grok. Cl
 - **Đã cấp quyền** đếm các quyền OAuth còn hạn, không phải số tài khoản duy nhất hoặc trạng thái website đang đăng nhập.
 - **Hoạt động trong 5 phút** là số kết nối có lệnh MCP đã xác thực gần đây. Nếu chưa có, hãy thử câu lệnh đọc file từ chat.
 - **Yêu cầu chờ duyệt** chỉ xuất hiện khi website bắt đầu OAuth. Đối chiếu mã và callback URL trước khi bấm Cho phép; tên client do bên gọi tự khai báo.
-- Dùng **Thu hồi** trên từng kết nối hoặc **Thu hồi toàn bộ quyền** trong không gian dịch vụ. **Tắt cổng** vừa đóng listener vừa thu hồi quyền của riêng dịch vụ đó. Đổi workspace thu hồi mọi quyền Claude/Grok/Gemini; các cổng không tự khôi phục sau khi đóng ứng dụng.
+- Dùng **Thu hồi** trên từng kết nối hoặc **Thu hồi toàn bộ quyền** trong không gian dịch vụ. **Dừng URL** đóng tunnel tự động, listener và thu hồi quyền của riêng dịch vụ đó. Đổi workspace thu hồi mọi quyền Claude/Grok/Gemini; các cổng không tự khôi phục sau khi đóng ứng dụng.
 - Quick Tunnel tạo URL mới sau khi khởi động lại. Xóa/cập nhật connector cũ trên website và kết nối lại bằng URL mới. Access token tồn tại tối đa 15 phút; quyền và refresh token tối đa 8 giờ, chỉ giữ trong bộ nhớ.
 
 ## Meta AI Web

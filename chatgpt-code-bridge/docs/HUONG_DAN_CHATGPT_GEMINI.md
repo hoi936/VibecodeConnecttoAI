@@ -62,14 +62,8 @@ Trên `gemini.google.com`, mở **Cài đặt** (biểu tượng bánh răng ở
 ### Thiết lập lần đầu
 
 1. Mở Code Bridge cổng **3213** → ô **Gemini** → **Thiết lập Gemini**. Kiểm tra workspace và quyền ghi trước khi duyệt bất kỳ kết nối nào. Tunnel ChatGPT đang chạy sẽ được giữ nguyên.
-2. Cài [`cloudflared`](https://developers.cloudflare.com/tunnel/downloads/) nếu chưa có. Trong **terminal thứ hai**, tại `chatgpt-code-bridge`, chạy:
-
-   ```bash
-   npm run gemini:tunnel
-   ```
-
-   Lệnh tạo URL HTTPS công khai tạm thời trỏ **chỉ** vào cổng MCP/OAuth `http://127.0.0.1:3212`. Giữ terminal này mở. Không trỏ URL công khai vào dashboard cổng 3213/3210.
-3. Copy **URL gốc** mà `cloudflared` in ra, ví dụ `https://abc.trycloudflare.com` (không thêm `/mcp`). Dán vào ô **URL HTTPS gốc** trên Code Bridge → Gemini và bấm **Bật cổng Gemini**. Đây là URL *chỉ dùng trong Code Bridge*.
+2. Bấm **Tạo URL và kết nối Gemini**. Code Bridge tự cài `cloudflared` từ bản phát hành chính thức nếu cần, kiểm tra SHA-256, chạy tunnel và bật cổng MCP/OAuth `http://127.0.0.1:3212`. Chờ trạng thái **URL đã sẵn sàng**. Không trỏ URL công khai vào dashboard cổng 3213/3210.
+3. URL HTTPS gốc sẽ hiện tự động bên trái. Nếu bạn có URL HTTPS hoặc reverse proxy riêng, mở **Dùng URL HTTPS riêng (nâng cao)** để nhập thủ công; URL gốc ở đó không có `/mcp`.
 4. Ở ô bên phải, bấm **Copy URL MCP để dán vào Gemini**. URL được copy phải có dạng `https://abc.trycloudflare.com/mcp`. Trong Gemini Web → **Cài đặt → Ứng dụng đã kết nối** (hoặc **Trí thông minh cá nhân → Ứng dụng đã kết nối**) → **Ứng dụng tùy chỉnh cho Spark**, dán **URL có `/mcp`** vào ô **URL của máy chủ MCP** rồi bấm **Tiếp theo**. Không dán URL gốc `https://abc.trycloudflare.com` vào Gemini: Google sẽ báo đó không phải máy chủ MCP hợp lệ. Nếu trang duyệt kết nối của Code Bridge mở ra, giữ trang đó mở.
 5. Quay lại Code Bridge → Gemini → **Yêu cầu kết nối**. Đối chiếu **mã yêu cầu** và **địa chỉ trả về (callback URL)** với trang đang chờ; bấm **Cho phép** nếu đúng yêu cầu của bạn. Tên ứng dụng hiển thị là tên client tự khai, không chứng minh danh tính tài khoản Google. Nếu không nhận ra yêu cầu, bấm **Từ chối**.
 6. Trở lại Gemini. Trong chat, gõ `@` và chọn custom app vừa thêm (tên có thể do bạn đặt, chẳng hạn `geminiVibe`); yêu cầu: “Hãy dùng Code Bridge để liệt kê thư mục được phép và đọc `index.html` trong dự án. Chưa sửa file.” Xem **Nhật ký hoạt động** để biết bridge đã nhận lệnh công cụ chưa. “Cổng local đã bật” chỉ nói cổng 3212 đang chạy; “1 quyền đã cấp” nghĩa là một luồng OAuth đã hoàn tất, chưa chứng minh Gemini đã gọi công cụ đọc file.
@@ -89,11 +83,11 @@ Không thể nâng quyền cho token đã cấp khi chỉ đọc bằng cách b�
 
 ### Sau khi khởi động lại
 
-1. Chạy lại Code Bridge và terminal `npm run gemini:tunnel`.
-2. Vào ô Gemini rồi **Bật cổng Gemini** với URL HTTPS gốc hiện hành. Nếu dùng Cloudflare Quick Tunnel, URL có thể thay đổi sau mỗi lần chạy; cập nhật URL MCP trong Custom apps của Gemini hoặc thêm lại app theo giao diện Google.
+1. Chạy lại Code Bridge, vào ô Gemini và bấm **Tạo URL và kết nối Gemini**.
+2. Nếu dùng Cloudflare Quick Tunnel, URL có thể thay đổi sau mỗi lần chạy; cập nhật URL MCP trong Custom apps của Gemini hoặc thêm lại app theo giao diện Google.
 3. Bắt đầu kết nối lại từ Gemini và duyệt yêu cầu mới trên dashboard. Các quyền cũ không tồn tại sau khi ứng dụng đóng. Với domain HTTPS cố định, địa chỉ app có thể giữ nguyên nhưng vẫn phải cấp quyền OAuth mới.
 
-Quyền Gemini trong bridge tối đa **8 giờ**; access token sống **15 phút** và có thể được làm mới trong thời hạn quyền. Bấm **Thu hồi** ở từng kết nối hoặc **Thu hồi toàn bộ quyền** để ngắt ngay. Bấm **Tắt** để đóng cổng MCP/OAuth. Để ngừng URL Quick Tunnel, dừng terminal `cloudflared` bằng `Ctrl+C`.
+Quyền Gemini trong bridge tối đa **8 giờ**; access token sống **15 phút** và có thể được làm mới trong thời hạn quyền. Bấm **Thu hồi** ở từng kết nối hoặc **Thu hồi toàn bộ quyền** để ngắt ngay. Bấm **Dừng URL** để dừng Quick Tunnel và đóng cổng MCP/OAuth.
 
 ## 4. Ai thực sự có thể xem file trên máy?
 
@@ -115,7 +109,7 @@ Một cuộc trò chuyện được chia sẻ cho người khác **không tự �
 - **ChatGPT báo “Không tìm thấy điểm cuối MCP”:** vào cổng 3213 → ChatGPT → **Quản lý kết nối**. Nếu tunnel chưa **Sẵn sàng**, bấm **Kết nối lại** hoặc **Thêm kết nối**, nhập đúng Tunnel ID và Runtime API Key, rồi chờ trạng thái sẵn sàng *trước khi* tạo plugin trong ChatGPT. Nếu phiên cũ ở cổng 3210 đã tắt, bridge mới sẽ ghi “Phiên cũ đã tắt” và cho dùng lại Tunnel ID đó. Nếu tunnel đã sẵn sàng mà ChatGPT vẫn báo lỗi, kiểm tra organization/workspace được liên kết và quyền **Tunnels Read + Use** trong OpenAI Platform. OpenAI nêu rằng app discovery và tool call cần `tunnel-client` đang chạy.
 - **Gemini báo “URL này có vẻ không phải máy chủ MCP hợp lệ”:** kiểm tra URL dán vào Gemini có đúng đuôi **`/mcp`**. URL gốc của tunnel chỉ dùng để bật cổng trong Code Bridge. Dùng nút **Copy URL MCP** trên giao diện để tránh dán nhầm.
 - **Gemini báo đăng ký OAuth tự động thất bại:** dùng Code Bridge mới nhất và thử lại bằng URL MCP; bản cũ giới hạn 5 địa chỉ trả về, trong khi Gemini Spark có thể đăng ký 6. Không nhập Runtime API Key ChatGPT vào các ô OAuth của Gemini. Nếu vẫn lỗi, xem **Nhật ký hoạt động** để xác định yêu cầu dừng ở bước nào.
-- **Gemini không có Custom apps:** xem điều kiện tài khoản Google ở mục 3. Nếu URL báo 502, giữ terminal `gemini:tunnel` mở và xác nhận cổng đích là `127.0.0.1:3212`. Nếu trang xác thực chờ quá lâu, quay lại Gemini bắt đầu mới; yêu cầu chờ duyệt trong bridge hết hạn sau **5 phút**.
+- **Gemini không có Custom apps:** xem điều kiện tài khoản Google ở mục 3. Nếu URL báo 502, kiểm tra trạng thái URL tự động và tạo lại nếu tunnel đã ngắt. Nếu trang xác thực chờ quá lâu, quay lại Gemini bắt đầu mới; yêu cầu chờ duyệt trong bridge hết hạn sau **5 phút**.
 - **Sau khi đổi workspace:** mọi quyền Gemini cũ bị thu hồi; ChatGPT còn dùng tunnel nhưng nay trỏ đến workspace mới. Kiểm tra lại thư mục đang chọn trước khi yêu cầu đọc file.
 - **Có phiên cũ ở cổng 3210:** launcher cổng 3213 có thể hiển thị trạng thái phiên ChatGPT cũ và cho dừng riêng. Một Tunnel ID chỉ nên được một tiến trình dùng tại một thời điểm. Nếu cổng 3210 đã tắt khi bridge 3213 còn chạy, bản ghi cũ chuyển sang “Phiên cũ đã tắt” và không ngăn tạo kết nối mới với cùng Tunnel ID; sau khi khởi động lại bridge 3213, bản ghi phiên cũ có thể không còn hiển thị.
 
