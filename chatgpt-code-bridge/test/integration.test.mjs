@@ -94,6 +94,11 @@ test('MCP HTTP, workspace boundaries, permissions and local UI', { timeout: 1200
   });
   await t.test('UI, preview, and credential handling', async () => {
     assert.match(await (await fetch(base)).text(), /Code Bridge/);
+    assert.equal(status.quickTunnels.gemini.state, 'stopped');
+    const missingApi = await post('/api/gemini/quick-tunnel/unknown', {});
+    assert.equal(missingApi.status, 404);
+    assert.match(missingApi.headers.get('content-type'), /application\/json/);
+    assert.match((await missingApi.json()).error, /API này không có/);
     const preview = await fetch(base + '/preview/index.html');
     assert.equal(preview.status, 200); assert.match(preview.headers.get('content-security-policy'), /sandbox/);
     assert.match(await preview.text(), /Xin chào/);

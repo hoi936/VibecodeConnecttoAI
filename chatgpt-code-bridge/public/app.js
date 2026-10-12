@@ -3,13 +3,27 @@ let state, selectedFile = '', noticeTimer;
 function notify(message, error = false) { $('notice').hidden = false; $('notice').textContent = message; $('notice').className = error ? 'error' : ''; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 6000); }
 async function api(url, body) {
   const response = await fetch(url, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bridge-CSRF': state.csrf }, body: JSON.stringify(body) });
-  const result = await response.json();
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    throw new Error('Code Bridge đang chạy phiên cũ hoặc API chưa sẵn sàng. Đóng cửa sổ Code Bridge cũ ở cổng này, mở bản mới rồi tải lại trang.');
+  }
+  let result;
+  try { result = await response.json(); }
+  catch { throw new Error('Code Bridge trả dữ liệu không hợp lệ. Hãy khởi động lại ứng dụng rồi tải lại trang.'); }
   if (!response.ok) throw new Error(result.error || 'Yêu cầu không thành công.');
   return result;
 }
 function resultText(result) { if (result.isError) throw new Error(result.content?.map(c => c.text || '').join('\n')); return result.content?.map(c => c.text || '').join('\n') || JSON.stringify(result, null, 2); }
 function renderQuickTunnel(provider, prefix, name) {
-  const quick = state.quickTunnels?.[provider] || { state: 'stopped' };
+  const quick = state.quickTunnels?.[provider];
+  if (!quick) {
+    $(`start-${prefix}-quick`).disabled = true;
+    $(`stop-${prefix}-quick`).disabled = true;
+    $(`${prefix}-quick-state`).textContent = 'Phiên Code Bridge đang chạy chưa có nút tạo URL. Đóng ứng dụng cũ ở cổng này, mở bản mới rồi tải lại trang.';
+    $(`${prefix}-quick-state`).classList.add('is-error');
+    $(`${prefix}-quick-progress`).hidden = true;
+    $(`${prefix}-quick-origin`).hidden = true;
+    return;
+  }
   const active = ['installing', 'starting', 'ready'].includes(quick.state);
   $(`start-${prefix}-quick`).disabled = active;
   $(`start-${prefix}-quick`).textContent = quick.state === 'ready' ? `URL ${name} đang chạy` : quick.state === 'error' ? `Thử tạo lại URL ${name}` : `Tạo URL và kết nối ${name} ↗`;
@@ -290,7 +304,7 @@ function renderHub() {
   const supported = Array.isArray(state.connections), name = providerName(selectedProvider);
   const connections = state.connections || [];
   $('upgrade-notice').hidden = supported;
-  $('backend-upgrade-notice').hidden = !!(state.claude && state.grok);
+  $('backend-upgrade-notice').hidden = !!(state.claude && state.grok && state.quickTunnels);
   for (const provider of ['chatgpt', 'gemini', 'claude', 'grok']) {
     const ready = connections.filter(c => c.provider === provider && ['ready', 'authorized'].includes(c.state)).length;
     $(provider + '-home-count').textContent = ready;
