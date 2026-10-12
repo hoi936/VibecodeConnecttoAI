@@ -29,11 +29,12 @@ jobs:
       - name: Verify disk images and checksums
         working-directory: chatgpt-code-bridge
         run: |
-          for file in dist/CodeBridge-*-mac-*.dmg; do
+          cd dist
+          for file in CodeBridge-*-mac-*.dmg; do
             hdiutil verify "$file"
             shasum -a 256 -c "$file.sha256"
           done
-          for file in dist/CodeBridge-*-mac-*.app.zip; do
+          for file in CodeBridge-*-mac-*.app.zip; do
             shasum -a 256 -c "$file.sha256"
           done
       - uses: actions/upload-artifact@v4
