@@ -6,6 +6,8 @@ Hỗ trợ thêm **Gemini Web → URL HTTPS public → cổng MCP có OAuth → 
 
 Xem [hướng dẫn ChatGPT và Gemini](docs/HUONG_DAN_CHATGPT_GEMINI.md) hoặc [hướng dẫn Claude, Grok và tình trạng Meta AI](docs/HUONG_DAN_CLAUDE_GROK_META.md). Meta AI hiện chỉ có chương trình Connectors dạng developer preview, nên bridge không hiển thị kết nối trực tiếp chưa được hỗ trợ.
 
+Muốn chạy trên máy Windows khác, dùng [bản Windows x64 portable](docs/PHAN_PHOI_WINDOWS.md): giải nén ZIP, mở `CodeBridge.exe`. Gói này đã kèm Node, Filesystem MCP, tunnel-client và cloudflared; máy nhận không cần cài Node hoặc Git.
+
 ## Chạy bản đã cài
 
 Yêu cầu Node.js 22+ và Git. Linux/macOS cần `unzip` để cài tunnel runtime.
@@ -17,7 +19,7 @@ bash START-BRIDGE-LINUX.sh
 
 Mở **http://127.0.0.1:3213**. Trang chủ hiển thị hai ô lớn; chọn từng ô để thiết lập và xem trạng thái kết nối. Workspace mặc định là `demo-project/`; chọn dự án bằng đường dẫn tuyệt đối trong **Dự án & file**.
 
-Windows: chạy `START-BRIDGE-WINDOWS.bat`. Nếu đã cài dependency bằng Node.js trong WSL, hãy chạy bằng WSL với `bash START-BRIDGE-LINUX.sh`; tránh dùng chung node_modules giữa Windows và Linux. Bản này hiện được build và kiểm thử trên Linux/WSL, chưa kiểm thử trên Windows native.
+Windows từ mã nguồn: chạy `START-BRIDGE-WINDOWS.bat`. Nếu đã cài dependency bằng Node.js trong WSL, hãy chạy bằng WSL với `bash START-BRIDGE-LINUX.sh`; tránh dùng chung node_modules giữa Windows và Linux. Bản portable `.exe` đã được kiểm tra chạy native trên Windows, gồm dashboard và Filesystem MCP.
 
 ## Hai dịch vụ và nhiều kết nối
 
@@ -107,7 +109,7 @@ Từ trang chủ chọn **Claude** hoặc **Grok**. Hai dịch vụ dùng cổng
 
 API quản trị và MCP chỉ bind loopback. API thao tác yêu cầu CSRF token; kiểm tra Host/Origin chặn website bên ngoài gọi trực tiếp. Preview chặn file ẩn, node_modules và symlink ra ngoài workspace. MCP được cấp quyền trên toàn bộ workspace đã chọn, bao gồm file cấu hình trong đó: hãy chọn đúng thư mục dự án.
 
-Config workspace/quyền ghi/danh sách Tunnel ID/URL Gemini nằm trong thư mục `BRIDGE_DATA_DIR`, không chứa Runtime API Key hoặc OAuth token. Bản này là prototype cho một người dùng, chưa có multi-user, durable audit, checkpoint/undo hoặc installer portable.
+Config workspace/quyền ghi/danh sách Tunnel ID/URL Gemini nằm trong thư mục `BRIDGE_DATA_DIR`, không chứa Runtime API Key hoặc OAuth token. Bản này là prototype cho một người dùng, chưa có multi-user, durable audit, checkpoint/undo hoặc trình cài đặt hệ thống. Bản Windows portable không cần cài đặt.
 
 ## Kiểm thử
 
