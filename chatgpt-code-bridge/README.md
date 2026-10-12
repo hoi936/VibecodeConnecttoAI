@@ -1,4 +1,4 @@
-# Code Bridge 0.3.3 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
+# Code Bridge 0.3.4 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
 
 Ứng dụng local cho mô hình **ChatGPT Web → OpenAI Secure MCP Tunnel → Filesystem MCP → workspace trên máy**.
 
@@ -105,13 +105,20 @@ Từ trang chủ chọn **Claude** hoặc **Grok**, rồi bấm **Tạo URL và 
 - Bật/tắt quyền ghi; khi tắt, endpoint MCP chỉ công bố và cho chạy tool được đánh dấu read-only.
 - Endpoint MCP Streamable HTTP stateless tại `/mcp`, proxy sang tiến trình Filesystem MCP stdio.
 - Xem file, sửa nội dung, thử tool JSON và xem nhật ký trong bộ nhớ (100 mục).
-- Preview **HTML tĩnh** trong iframe sandbox; chưa chạy Vite/React dev server, shell, build hoặc test của workspace.
+- Preview **HTML tĩnh** trong iframe sandbox. Khi chủ máy bật quyền terminal và cấp quyền cho kết nối, AI có thêm công cụ `run_command` để chạy lệnh shell trong thư mục dự án; lệnh chạy tối đa 30 giây, đầu ra tối đa 64 KiB. Công cụ này dành cho lệnh kết thúc nhanh, không giữ dev server chạy nền.
 - Start/stop nhiều tunnel-client độc lập; mỗi tiến trình dùng một cổng readiness loopback được cấp tự động.
 - Gemini Web: cổng MCP OAuth riêng, duyệt/từ chối kết nối local, thu hồi token và nhật ký lệnh có tiền tố `gemini:`.
 
 API quản trị và MCP chỉ bind loopback. API thao tác yêu cầu CSRF token; kiểm tra Host/Origin chặn website bên ngoài gọi trực tiếp. Preview chặn file ẩn, node_modules và symlink ra ngoài workspace. MCP được cấp quyền trên toàn bộ workspace đã chọn, bao gồm file cấu hình trong đó: hãy chọn đúng thư mục dự án.
 
 Config workspace/quyền ghi/danh sách Tunnel ID/URL Gemini nằm trong thư mục `BRIDGE_DATA_DIR`, không chứa Runtime API Key hoặc OAuth token. Bản này là prototype cho một người dùng, chưa có multi-user, durable audit, checkpoint/undo hoặc trình cài đặt hệ thống. Bản Windows portable không cần cài đặt.
+
+### Quyền terminal
+
+1. Mở **Dự án & file** → bật **Quyền terminal trên máy**. Quyền này mặc định tắt mỗi khi khởi động Code Bridge và không được lưu vào cấu hình.
+2. Với ChatGPT, mở **ChatGPT → Quản lý kết nối** → bấm **Cấp terminal** tại đúng tunnel cần dùng. Với Gemini/Claude/Grok, kết nối lại và đánh dấu **Cho phép chạy lệnh terminal** khi duyệt yêu cầu OAuth mới. Quyền đã cấp trước khi nâng cấp không tự có terminal.
+3. Trong cuộc chat, yêu cầu AI dùng `run_command` để chạy một lệnh cụ thể, ví dụ mở file HTML bằng `start "" "D:\\...\\index.html"` trên Windows, `open .../index.html` trên macOS, hoặc `explorer.exe .../index.html` trên WSL. AI chỉ nhìn thấy công cụ khi cả công tắc hệ thống và quyền của kết nối đều bật.
+4. Tắt công tắc hệ thống để chặn terminal ngay; quyền ChatGPT trong phiên bị xóa. Lệnh chạy với quyền của tài khoản hệ điều hành đang mở Code Bridge, có thể truy cập ngoài thư mục dự án và tạo tiến trình nền. Chỉ cấp cho kết nối bạn tin cậy.
 
 ## Kiểm thử
 

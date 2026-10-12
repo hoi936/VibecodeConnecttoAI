@@ -19,8 +19,8 @@ test('public URL validation', () => {
   assert.equal(validatePublicOrigin(issuer + '/'), issuer);
 });
 test('remote OAuth requires local consent and enforces grant boundaries', async t => {
-  let context = { workspace: '/workspace/one', allowWrites: true };
-  const gateway = createRemoteAccess({ port, getContext: () => context, handleMcp: (req, res) => res.json({ ok: true, workspace: req.auth.extra.workspace, allowWrites: req.auth.extra.allowWrites }) });
+  let context = { workspace: '/workspace/one', allowWrites: true, allowTerminal: false };
+  const gateway = createRemoteAccess({ port, getContext: () => context, handleMcp: (req, res) => res.json({ ok: true, workspace: req.auth.extra.workspace, allowWrites: req.auth.extra.allowWrites, allowTerminal: req.auth.extra.allowTerminal }) });
   t.after(() => gateway.close());
   await gateway.enable(issuer);
   let registration;
@@ -30,10 +30,10 @@ test('remote OAuth requires local consent and enforces grant boundaries', async 
   async function begin({ client = registration, redirect = redirectUri, resource = issuer + '/mcp' } = {}) {
     return http('/authorize?' + new URLSearchParams({ client_id: client.client_id, redirect_uri: redirect, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256', state: 'test-state', scope: 'mcp', resource }));
   }
-  async function authorize() {
+  async function authorize(allowTerminal = false) {
     const initial = await begin(); assert.equal(initial.status, 302);
     const pending = gateway.status().pending.at(-1);
-    gateway.approve(pending.id);
+    gateway.approve(pending.id, undefined, allowTerminal);
     const redirect = await http(initial.headers.location);
     assert.equal(redirect.status, 302);
     const location = new URL(redirect.headers.location);
@@ -94,6 +94,23 @@ test('remote OAuth requires local consent and enforces grant boundaries', async 
     const next = rotated.json();
     assert.equal((await http('/revoke', new URLSearchParams({ client_id: registration.client_id, token: next.refresh_token }).toString())).status, 200);
     for (const value of [token.access_token, next.access_token]) assert.equal((await http('/mcp', {}, { Authorization: 'Bearer ' + value })).status, 401);
+  });
+  await t.test('terminal requires explicit approval while enabled', async () => {
+    const pendingResponse = await begin();
+    const pending = gateway.status().pending.at(-1);
+    assert.throws(() => gateway.approve(pending.id, undefined, true), /bật quyền terminal/);
+    gateway.deny(pending.id);
+    await http(pendingResponse.headers.location);
+    context.allowTerminal = true;
+    const without = (await exchange(await authorize())).json();
+    assert.equal((await http('/mcp', {}, { Authorization: 'Bearer ' + without.access_token })).json().allowTerminal, false);
+    const withTerminal = (await exchange(await authorize(true))).json();
+    const auth = { Authorization: 'Bearer ' + withTerminal.access_token };
+    assert.equal((await http('/mcp', {}, auth)).json().allowTerminal, true);
+    context.allowTerminal = false;
+    assert.equal(gateway.status().connections.find(c => c.allowTerminal), undefined);
+    context.allowTerminal = true;
+    gateway.revokeAll();
   });
   await t.test('read-only grants do not gain writes and workspace changes invalidate', async () => {
     context.allowWrites = false;

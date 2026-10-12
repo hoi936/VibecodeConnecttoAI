@@ -48,6 +48,21 @@ test('MCP HTTP, workspace boundaries, permissions and local UI', { timeout: 1200
     assert.equal(result.isError, undefined);
     assert.match(result.content[0].text, /Hello/);
   });
+  await t.test('terminal needs local switch and a separate ChatGPT connection grant', async () => {
+    assert.equal(status.terminalEnabled, false);
+    assert.ok(!(await mcp.listTools()).tools.some(tool => tool.name === 'run_command'));
+    assert.equal((await post('/api/tool', { name: 'run_command', arguments: { command: 'echo denied' } })).status, 400);
+    assert.equal((await fetch(base + '/api/terminal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"enabled":true}' })).status, 403);
+    assert.equal((await post('/api/terminal', { enabled: true })).status, 200);
+    assert.ok((await (await fetch(base + '/api/status')).json()).tools.some(tool => tool.name === 'run_command'));
+    assert.ok(!(await mcp.listTools()).tools.some(tool => tool.name === 'run_command'));
+    const result = await (await post('/api/tool', { name: 'run_command', arguments: { command: process.platform === 'win32' ? 'cd' : 'pwd' } })).json();
+    assert.equal(result.isError, false);
+    assert.match(result.content[0].text, /project/);
+    assert.equal((await post('/api/tunnel/terminal', { id: 'unknown', enabled: true })).status, 400);
+    assert.equal((await post('/api/terminal', { enabled: false })).status, 200);
+    assert.equal((await post('/api/tool', { name: 'run_command', arguments: { command: 'echo denied' } })).status, 400);
+  });
   await t.test('dry run then actual edit', async () => {
     const args = { path: 'index.html', edits: [{ oldText: 'Hello', newText: 'Xin chào' }], dryRun: true };
     const dry = await mcp.callTool({ name: 'edit_file', arguments: args });

@@ -13,6 +13,7 @@ import { createTunnelManager } from './tunnel-manager.mjs';
 import { createLegacyBridge } from './legacy-bridge.mjs';
 import { createRemoteAccess } from './remote-access.mjs';
 import { createQuickTunnelManager } from './quick-tunnel-manager.mjs';
+import { canUseTerminal, createTerminalRunner, terminalTool } from './terminal.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.BRIDGE_PORT || 3210);
@@ -24,17 +25,22 @@ let config = { workspace: path.join(root, 'demo-project'), allowWrites: true, tu
 try { config = { ...config, ...JSON.parse(await readFile(path.join(dataDir, 'config.json'), 'utf8')) }; } catch (e) { if (e.code !== 'ENOENT') throw e; }
 delete config.connectionMode; // Old versions stored an exclusive mode; both providers can now run together.
 let client, tools = [], busy = 0, changing = false, connectionChanging = false, toolQueue = Promise.resolve();
+let terminalEnabled = false; // Local, session-only choice. Never read from persisted config.
+const terminalProfiles = new Set(), terminalRunner = createTerminalRunner();
 const events = [];
 function log(action, ok, detail = '') {
   events.unshift({ time: new Date().toISOString(), action, ok, detail });
   events.splice(100);
 }
-function availableTools(remoteAuth) { return tools.filter(t => (config.allowWrites && (!remoteAuth || remoteAuth.allowWrites)) || t.annotations?.readOnlyHint === true); }
+function availableTools(remoteAuth) {
+  const files = tools.filter(t => (config.allowWrites && (!remoteAuth || remoteAuth.allowWrites)) || t.annotations?.readOnlyHint === true);
+  return canUseTerminal(terminalEnabled, remoteAuth, terminalProfiles) ? [...files, terminalTool] : files;
+}
 async function connect(workspace) {
   const canonical = await realpath(workspace);
   if (!(await stat(canonical)).isDirectory() || path.dirname(canonical) === canonical) throw new Error('Chọn một thư mục dự án hợp lệ.');
   if (!existsSync(path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'))) throw new Error('Cần build Filesystem MCP trước: npm run build');
-  const next = new Client({ name: 'local-code-bridge', version: '0.3.3' });
+  const next = new Client({ name: 'local-code-bridge', version: '0.3.4' });
   const transport = new StdioClientTransport({ command: process.execPath, args: [path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'), canonical], stderr: 'pipe' });
   let startupError = '';
   transport.stderr?.on('data', chunk => { startupError = (startupError + chunk.toString()).slice(-3000); });
@@ -64,10 +70,10 @@ async function callTool(name, args = {}, remoteAuth) {
       if (remotes[remoteAuth.provider]) remotes[remoteAuth.provider].validateGrant(remoteAuth.grantId);
       else if (remoteAuth.id) tunnels.touch(remoteAuth.id);
     }
-    if (!availableTools(remoteAuth).some(t => t.name === name)) throw new Error('Công cụ không có hoặc quyền ghi đang tắt.');
+    if (!availableTools(remoteAuth).some(t => t.name === name)) throw new Error('Công cụ không có hoặc quyền tương ứng đang tắt.');
     const action = remoteAuth ? `${remoteAuth.provider}:${name}` : name;
     try {
-      const result = await client.callTool({ name, arguments: normalizeArgs(args) });
+      const result = name === terminalTool.name ? await terminalRunner.run(args, config.workspace) : await client.callTool({ name, arguments: normalizeArgs(args) });
       log(action, !result.isError, remoteAuth?.id || '');
       return result;
     } catch (e) { log(action, false); throw e; }
@@ -79,7 +85,7 @@ function tunnelPath() { return path.join(root, 'runtime', process.platform === '
 const tunnels = createTunnelManager({ binary: tunnelPath(), origin, cwd: root, profiles: config.chatgptProfiles, log });
 const legacy = createLegacyBridge(process.env.BRIDGE_LEGACY_URL, origin);
 await legacy.poll();
-const remotes = Object.fromEntries(Object.entries({ gemini: ['GEMINI_GATEWAY_PORT', 3212], claude: ['CLAUDE_GATEWAY_PORT', 3214], grok: ['GROK_GATEWAY_PORT', 3215] }).map(([providerName, [envName, defaultPort]]) => [providerName, createRemoteAccess({ getContext: () => ({ workspace: config.workspace, allowWrites: config.allowWrites }), handleMcp, log, providerName, port: Number(process.env[envName] || defaultPort) })]));
+const remotes = Object.fromEntries(Object.entries({ gemini: ['GEMINI_GATEWAY_PORT', 3212], claude: ['CLAUDE_GATEWAY_PORT', 3214], grok: ['GROK_GATEWAY_PORT', 3215] }).map(([providerName, [envName, defaultPort]]) => [providerName, createRemoteAccess({ getContext: () => ({ workspace: config.workspace, allowWrites: config.allowWrites, allowTerminal: terminalEnabled }), handleMcp, log, providerName, port: Number(process.env[envName] || defaultPort) })]));
 const quickTunnels = createQuickTunnelManager({ root, dataDir,
   ports: { gemini: Number(process.env.GEMINI_GATEWAY_PORT || 3212), claude: Number(process.env.CLAUDE_GATEWAY_PORT || 3214), grok: Number(process.env.GROK_GATEWAY_PORT || 3215) },
   enable: (name, origin) => connectionAction(async () => {
@@ -95,7 +101,7 @@ const quickTunnels = createQuickTunnelManager({ root, dataDir,
   }
 });
 function connections() {
-  const current = tunnels.list().map(p => ({ ...p, workspace: config.workspace }));
+  const current = tunnels.list().map(p => ({ ...p, workspace: config.workspace, allowTerminal: terminalEnabled && terminalProfiles.has(p.id) }));
   const old = legacy.list().filter(p => p.state !== 'offline' || !current.some(t => t.tunnelId === p.tunnelId));
   return [...current, ...old, ...Object.values(remotes).flatMap(remote => remote.status().connections)];
 }
@@ -125,7 +131,7 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.get('/health', (req, res) => res.json({ ok: true, mcp: !!client, tunnel: connections().find(p => p.provider === 'chatgpt' && p.state === 'ready') ? 'ready' : 'stopped' }));
-app.get('/api/status', (req, res) => res.json({ ...config, connectionMode: 'both', csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp` }));
+app.get('/api/status', (req, res) => res.json({ ...config, connectionMode: 'both', terminalEnabled, csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp` }));
 app.post('/api/connections/check', async (req, res) => {
   await Promise.all([tunnels.poll(), legacy.poll()]);
   res.json({ ok: true, connections: connections(), summary: connectionSummary() });
@@ -136,6 +142,7 @@ app.post('/api/workspace', async (req, res) => {
   try {
     if (typeof req.body.path !== 'string' || !path.isAbsolute(req.body.path)) throw new Error('Nhập đường dẫn tuyệt đối đến dự án.');
     await connect(req.body.path);
+    terminalProfiles.clear();
     for (const remote of Object.values(remotes)) remote.revokeAll();
     await saveConfig();
     res.json({ ok: true, workspace: config.workspace });
@@ -145,6 +152,24 @@ app.post('/api/permissions', async (req, res) => {
   if (busy || changing || connectionChanging) return res.status(409).json({ error: 'Chờ thao tác hiện tại hoàn thành.' });
   if (typeof req.body.allowWrites !== 'boolean') throw new Error('allowWrites phải là boolean.');
   config.allowWrites = req.body.allowWrites; await saveConfig(); res.json({ ok: true });
+});
+app.post('/api/terminal', (req, res) => {
+  if ((changing || connectionChanging) && req.body.enabled) return res.status(409).json({ error: 'Chờ thao tác hiện tại hoàn thành trước khi bật terminal.' });
+  if (typeof req.body.enabled !== 'boolean') throw new Error('enabled phải là boolean.');
+  terminalEnabled = req.body.enabled;
+  if (!terminalEnabled) { terminalProfiles.clear(); terminalRunner.stopAll(); }
+  log('terminal:system', true, terminalEnabled ? 'enabled' : 'disabled');
+  res.json({ ok: true, terminalEnabled });
+});
+app.post('/api/tunnel/terminal', (req, res) => {
+  if ((busy || changing || connectionChanging) && req.body.enabled) return res.status(409).json({ error: 'Chờ lệnh hiện tại hoàn thành trước khi cấp quyền terminal.' });
+  if (typeof req.body.enabled !== 'boolean') throw new Error('enabled phải là boolean.');
+  if (!tunnels.list().some(p => p.id === req.body.id)) throw new Error('Không tìm thấy kết nối ChatGPT.');
+  if (req.body.enabled && !terminalEnabled) throw new Error('Hãy bật quyền terminal trên máy trước.');
+  if (req.body.enabled) terminalProfiles.add(req.body.id);
+  else { terminalProfiles.delete(req.body.id); terminalRunner.stopAll(); }
+  log('terminal:chatgpt', true, req.body.enabled ? 'enabled' : 'disabled');
+  res.json({ ok: true });
 });
 app.post('/api/tool', async (req, res) => res.json(await callTool(req.body.name, req.body.arguments)));
 // Keep the old endpoint harmless for clients that have not reloaded the dashboard yet.
@@ -158,9 +183,9 @@ for (const [name, remote] of Object.entries(remotes)) {
     config[`${name}Origin`] = result.publicOrigin; await saveConfig(); return result;
   })));
   app.post(`/api/${name}/disable`, async (req, res) => res.json(await connectionAction(async () => { await quickTunnels.stop(name); await remote.disable(); return { ok: true }; })));
-  app.post(`/api/${name}/approve`, (req, res) => { remote.approve(req.body.id, req.body.label); res.json({ ok: true }); });
+  app.post(`/api/${name}/approve`, (req, res) => { remote.approve(req.body.id, req.body.label, req.body.allowTerminal ?? false); res.json({ ok: true }); });
   app.post(`/api/${name}/deny`, (req, res) => { remote.deny(req.body.id); res.json({ ok: true }); });
-  app.post(`/api/${name}/revoke`, (req, res) => { if (req.body.id) remote.revoke(req.body.id); else remote.revokeAll(); res.json({ ok: true }); });
+  app.post(`/api/${name}/revoke`, (req, res) => { terminalRunner.stopAll(); if (req.body.id) remote.revoke(req.body.id); else remote.revokeAll(); res.json({ ok: true }); });
   app.post(`/api/${name}/rename`, (req, res) => { remote.rename(req.body.id, req.body.label); res.json({ ok: true }); });
 }
 async function startTunnel(body) {
@@ -171,12 +196,14 @@ async function startTunnel(body) {
 }
 app.post('/api/tunnel/start', async (req, res) => res.json(await connectionAction(() => startTunnel(req.body))));
 app.post('/api/tunnel/stop', async (req, res) => res.json(await connectionAction(async () => {
+  if (req.body.id) terminalProfiles.delete(req.body.id); else terminalProfiles.clear();
   if (req.body.id === 'legacy-chatgpt') await legacy.stop();
   else if (req.body.id) await tunnels.stop(req.body.id);
   else await tunnels.stopAll();
   return { ok: true };
 })));
 app.post('/api/tunnel/remove', async (req, res) => res.json(await connectionAction(async () => {
+  terminalProfiles.delete(req.body.id);
   await tunnels.remove(req.body.id); config.chatgptProfiles = tunnels.savedProfiles(); await saveConfig(); return { ok: true };
 })));
 let healthPolling = false;
@@ -193,7 +220,7 @@ async function handleMcp(req, res) {
   const remoteAuth = remotes[req.bridgeSource] ? { ...req.auth.extra, provider: req.bridgeSource } : { provider: 'chatgpt', id: req.params.id, workspace: config.workspace, allowWrites: true };
   if (connectionChanging) return res.status(409).json({ error: 'Đang thay đổi kết nối.' });
   if (remoteAuth.id) tunnels.touch(remoteAuth.id);
-  const server = new Server({ name: 'Local Code Bridge', version: '0.3.3' }, { capabilities: { tools: {} }, instructions: `Work only in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. This server does not run shell commands.` });
+  const server = new Server({ name: 'Local Code Bridge', version: '0.3.4' }, { capabilities: { tools: {} }, instructions: `Work in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. If run_command is available, it runs on the local computer with the operating-system user's permissions; use it only when the task requires it.` });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: availableTools(remoteAuth) }));
   server.setRequestHandler(CallToolRequestSchema, async r => callTool(r.params.name, r.params.arguments, remoteAuth));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
@@ -218,6 +245,6 @@ app.use(express.static(path.join(root, 'public')));
 app.use((err, req, res, next) => { if (res.headersSent) return next(err); res.status(400).json({ error: err.message }); });
 await connect(config.workspace);
 const httpServer = app.listen(port, '127.0.0.1', () => console.log(`Code Bridge: ${origin}\nMCP: ${origin}/mcp\nWorkspace: ${config.workspace}`));
-async function shutdown() { clearInterval(healthTimer); await tunnels.close(); await quickTunnels.close(); await Promise.all(Object.values(remotes).map(remote => remote.close())); await toolQueue; await client?.close(); httpServer.close(); }
+async function shutdown() { clearInterval(healthTimer); terminalRunner.stopAll(); await tunnels.close(); await quickTunnels.close(); await Promise.all(Object.values(remotes).map(remote => remote.close())); await toolQueue; await client?.close(); httpServer.close(); }
 process.on('SIGINT', () => shutdown().then(() => process.exit(0)));
 process.on('SIGTERM', () => shutdown().then(() => process.exit(0)));

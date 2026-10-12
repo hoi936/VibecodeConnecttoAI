@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 let state, selectedFile = '', noticeTimer;
+$('workspace').querySelector('.section-heading').insertAdjacentHTML('afterend', '<div class="terminal-permission"><div><strong>Quyền terminal trên máy</strong><p class="muted">Mặc định tắt mỗi khi mở Code Bridge. Khi bật, lệnh chạy với quyền của tài khoản máy tính này và có thể tạo tiến trình nền. Thư mục dự án chỉ là nơi bắt đầu, không giới hạn quyền truy cập. Cấp quyền riêng cho từng kết nối ChatGPT hoặc khi duyệt Gemini/Claude/Grok.</p></div><label class="toggle"><input id="allow-terminal" type="checkbox"> Bật terminal</label></div>');
 function notify(message, error = false) { $('notice').hidden = false; $('notice').textContent = message; $('notice').className = error ? 'error' : ''; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 6000); }
 async function api(url, body) {
   const response = await fetch(url, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Bridge-CSRF': state.csrf }, body: JSON.stringify(body) });
@@ -67,6 +68,7 @@ async function refresh() {
   if (document.activeElement !== $('workspace-path')) $('workspace-path').value = state.workspace;
   renderHub();
   $('allow-writes').checked = state.allowWrites;
+  $('allow-terminal').checked = state.terminalEnabled === true;
   $('save-file').disabled = !selectedFile || !state.allowWrites;
   $('endpoint').textContent = state.endpoint;
   renderGemini();
@@ -107,7 +109,7 @@ function renderGemini() {
   $('copy-gemini-endpoint').disabled = !gemini.enabled;
   $('gemini-activity').textContent = gemini.lastCallAt ? `Kết nối MCP gần nhất: ${new Date(gemini.lastCallAt).toLocaleString('vi-VN')} · ${gemini.grantedCount} quyền còn hiệu lực` : `${gemini.grantedCount} quyền còn hiệu lực · Chưa có yêu cầu MCP được xác thực.`;
   const container = $('gemini-pending');
-  const pendingKey = JSON.stringify({ pending: gemini.pending, allowWrites: state.allowWrites });
+  const pendingKey = JSON.stringify({ pending: gemini.pending, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
   if (container.dataset.requests === pendingKey) return;
   container.dataset.requests = pendingKey;
   container.replaceChildren();
@@ -120,13 +122,16 @@ function renderGemini() {
     const context = document.createElement('p'); context.textContent = `${request.allowWrites && state.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file'} trong ${request.workspace}. Hết hạn lúc ${new Date(request.expiresAt * 1000).toLocaleTimeString('vi-VN')}.`;
     const nameLabel = document.createElement('label'); nameLabel.textContent = 'Tên để nhận biết kết nối';
     const nameInput = document.createElement('input'); nameInput.maxLength = 80; nameInput.placeholder = 'Ví dụ: Gemini cá nhân'; nameLabel.append(nameInput);
+    const terminalLabel = document.createElement('label'); terminalLabel.className = 'terminal-grant';
+    const terminalInput = document.createElement('input'); terminalInput.type = 'checkbox'; terminalInput.disabled = !state.terminalEnabled;
+    terminalLabel.append(terminalInput, document.createTextNode(' Cho phép chạy lệnh terminal trên máy (quyền cao, mặc định tắt)'));
     const buttons = document.createElement('div'); buttons.className = 'row';
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
-      button.onclick = protect(async () => { await api(`/api/gemini/${action}`, { id: request.id, label: nameInput.value.trim() }); await refresh(); notify(action === 'approve' ? 'Đã duyệt. Trở lại trang xác thực của Gemini.' : 'Đã từ chối kết nối.'); });
+      button.onclick = protect(async () => { await api(`/api/gemini/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); await refresh(); notify(action === 'approve' ? 'Đã duyệt. Trở lại trang xác thực của Gemini.' : 'Đã từ chối kết nối.'); });
       buttons.append(button);
     }
-    card.append(title, description, redirect, context, nameLabel, buttons); container.append(card);
+    card.append(title, description, redirect, context, nameLabel, terminalLabel, buttons); container.append(card);
   }
 }
 const remoteSites = {
@@ -159,7 +164,7 @@ function renderOtherRemote() {
   $('copy-remote-endpoint').disabled = !remote.enabled;
   $('remote-activity').textContent = remote.lastCallAt ? `Lệnh MCP gần nhất: ${new Date(remote.lastCallAt).toLocaleString('vi-VN')} · ${remote.grantedCount} quyền còn hiệu lực.` : `${remote.grantedCount} quyền còn hiệu lực · Chưa có lệnh MCP được xác thực.`;
   const container = $('remote-pending');
-  const pendingKey = JSON.stringify({ provider, pending: remote.pending, allowWrites: state.allowWrites });
+  const pendingKey = JSON.stringify({ provider, pending: remote.pending, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
   if (container.dataset.requests === pendingKey) return;
   container.dataset.requests = pendingKey;
   container.replaceChildren();
@@ -172,13 +177,16 @@ function renderOtherRemote() {
     const context = document.createElement('p'); context.textContent = `${request.allowWrites && state.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file'} trong ${request.workspace}. Hết hạn lúc ${new Date(request.expiresAt * 1000).toLocaleTimeString('vi-VN')}.`;
     const nameLabel = document.createElement('label'); nameLabel.textContent = 'Tên để nhận biết kết nối';
     const nameInput = document.createElement('input'); nameInput.maxLength = 80; nameInput.placeholder = `Ví dụ: ${site.name} cá nhân`; nameLabel.append(nameInput);
+    const terminalLabel = document.createElement('label'); terminalLabel.className = 'terminal-grant';
+    const terminalInput = document.createElement('input'); terminalInput.type = 'checkbox'; terminalInput.disabled = !state.terminalEnabled;
+    terminalLabel.append(terminalInput, document.createTextNode(' Cho phép chạy lệnh terminal trên máy (quyền cao, mặc định tắt)'));
     const buttons = document.createElement('div'); buttons.className = 'row';
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
-      button.onclick = protect(async () => { await api(`/api/${provider}/${action}`, { id: request.id, label: nameInput.value.trim() }); await refresh(); notify(action === 'approve' ? `Đã duyệt. Trở lại trang xác thực của ${site.name}.` : 'Đã từ chối kết nối.'); });
+      button.onclick = protect(async () => { await api(`/api/${provider}/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); await refresh(); notify(action === 'approve' ? `Đã duyệt. Trở lại trang xác thực của ${site.name}.` : 'Đã từ chối kết nối.'); });
       buttons.append(button);
     }
-    card.append(title, description, redirect, context, nameLabel, buttons); container.append(card);
+    card.append(title, description, redirect, context, nameLabel, terminalLabel, buttons); container.append(card);
   }
 }
 async function files(directory = '.') {
@@ -201,6 +209,7 @@ async function files(directory = '.') {
 }
 $('workspace-form').onsubmit = protect(async () => { await api('/api/workspace', { path: $('workspace-path').value }); selectedFile = ''; $('file-content').value = ''; $('current-file').textContent = 'Chọn một file'; await refresh(); await files(); $('preview').removeAttribute('src'); notify('Đã chuyển workspace.'); });
 $('allow-writes').onchange = protect(async () => { await api('/api/permissions', { allowWrites: $('allow-writes').checked }); await refresh(); });
+$('allow-terminal').onchange = protect(async () => { await api('/api/terminal', { enabled: $('allow-terminal').checked }); await refresh(); notify(state.terminalEnabled ? 'Terminal đã bật trên máy. Hãy cấp quyền riêng cho kết nối cần dùng.' : 'Terminal đã tắt.'); });
 $('reload-files').onclick = protect(() => files());
 $('save-file').onclick = protect(async () => { resultText(await tool('write_file', { path: selectedFile, content: $('file-content').value })); notify('Đã lưu file.'); await refresh(); });
 $('reload-preview').onclick = () => { $('preview').src = '/preview/index.html?reload=' + Date.now(); };
@@ -260,7 +269,7 @@ $('copy-remote-prompt').onclick = protect(async () => { await navigator.clipboar
 $('copy-prompt').onclick = protect(async () => { await navigator.clipboard.writeText('Hãy dùng Code Bridge để liệt kê thư mục được phép, đọc index.html trong workspace, rồi đề xuất một thay đổi nhỏ. Dùng edit_file với dryRun=true để xem diff trước khi áp dụng.'); notify('Đã copy yêu cầu thử.'); });
 $('tool-name').onchange = () => {
   const name = $('tool-name').value;
-  const examples = { list_allowed_directories: {}, list_directory: { path: '.' }, read_text_file: { path: 'index.html' }, edit_file: { path: 'index.html', edits: [{ oldText: 'Chào mừng đến Code Bridge', newText: 'Xin chào từ ChatGPT' }], dryRun: true }, write_file: { path: 'hello.txt', content: 'Xin chào!' }, search_files: { path: '.', pattern: '**/*.html' } };
+  const examples = { list_allowed_directories: {}, list_directory: { path: '.' }, read_text_file: { path: 'index.html' }, edit_file: { path: 'index.html', edits: [{ oldText: 'Chào mừng đến Code Bridge', newText: 'Xin chào từ ChatGPT' }], dryRun: true }, write_file: { path: 'hello.txt', content: 'Xin chào!' }, search_files: { path: '.', pattern: '**/*.html' }, run_command: { command: 'echo Code Bridge terminal ready', timeoutMs: 10000 } };
   $('tool-args').value = JSON.stringify(examples[name] || { path: '.' }, null, 2);
 };
 $('tool-form').onsubmit = protect(async () => { const result = await tool($('tool-name').value, JSON.parse($('tool-args').value)); $('tool-result').textContent = resultText(result); await refresh(); });
@@ -349,7 +358,7 @@ function renderConnections() {
   if (!state) return;
   const filter = selectedProvider, query = $('connection-search').value.trim().toLocaleLowerCase();
   const all = (state.connections || []).filter(p => (filter === 'all' || p.provider === filter) && (p.label + ' ' + (p.tunnelId || '')).toLocaleLowerCase().includes(query));
-  const key = JSON.stringify([all, filter, query]);
+  const key = JSON.stringify([all, filter, query, state.terminalEnabled]);
   if (key === connectionKey) return; connectionKey = key;
   const container = $('connection-list'); container.replaceChildren();
   if (!all.length) {
@@ -364,6 +373,7 @@ function renderConnections() {
     const project = node('small', item.workspace); project.title = item.workspace; text.append(project);
     if (item.tunnelId) text.append(node('small', item.tunnelId));
     if (item.provider !== 'chatgpt') text.append(node('small', item.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file'));
+    text.append(node('small', item.allowTerminal ? 'Terminal: đã cấp quyền' : 'Terminal: chưa cấp quyền'));
     identity.append(node('span', ({ chatgpt: 'C', gemini: '✦', claude: '✳', grok: '𝕏' })[item.provider] || '·', 'provider-logo ' + item.provider), text);
     const status = node('div'); status.append(node('span', stateName(item.state), 'badge ' + item.state));
     if (item.error) status.append(node('p', item.error, 'connection-error'));
@@ -377,6 +387,7 @@ function renderConnections() {
       action('Đổi tên', async () => { $('rename-provider').value = item.provider; $('rename-id').value = item.id; $('rename-label').value = item.label; $('rename-dialog').showModal(); });
       action('Thu hồi', () => api(`/api/${item.provider}/revoke`, { id: item.id }), true);
     } else {
+      if (!item.legacy && state.terminalEnabled) action(item.allowTerminal ? 'Tắt terminal' : 'Cấp terminal', () => api('/api/tunnel/terminal', { id: item.id, enabled: !item.allowTerminal }));
       if (!['stopped', 'error', 'offline'].includes(item.state)) action('Dừng', () => api('/api/tunnel/stop', { id: item.id }), true);
       else {
         action('Kết nối lại', async () => {

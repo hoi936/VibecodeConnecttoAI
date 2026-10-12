@@ -1,0 +1,17 @@
+.terminal-permission {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin: 18px 0;
+  padding: 20px 22px;
+  border: 1px solid #dbc7a8;
+  border-radius: 14px;
+  background: #fffaf1;
+}
+.terminal-permission strong { color: #704a1f; }
+.terminal-permission p { max-width: 850px; margin: 8px 0 0; line-height: 1.7; }
+.terminal-permission .toggle { color: #704a1f; font-weight: 700; }
+.terminal-grant { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; color: #704a1f; line-height: 1.5; }
+.terminal-grant input { flex: none; margin-top: 3px; accent-color: #8c652f; }
+@media (max-width: 720px) { .terminal-permission { flex-direction: column; } }

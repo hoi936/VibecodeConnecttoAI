@@ -1,6 +1,6 @@
 # Chạy Code Bridge trên máy Windows khác
 
-**Dùng gói `CodeBridge-0.3.3-win-x64.zip`.** Đây là bản portable cho Windows x64, không phải một tệp `.exe` độc lập: Node, Filesystem MCP và các chương trình tunnel phải nằm cạnh `CodeBridge.exe` trong thư mục đã giải nén. Máy nhận không cần cài Node.js hoặc Git. File `.exe` chưa được ký số.
+**Dùng gói `CodeBridge-0.3.4-win-x64.zip`.** Đây là bản portable cho Windows x64, không phải một tệp `.exe` độc lập: Node, Filesystem MCP và các chương trình tunnel phải nằm cạnh `CodeBridge.exe` trong thư mục đã giải nén. Máy nhận không cần cài Node.js hoặc Git. File `.exe` chưa được ký số.
 
 ## Trên máy nhận
 
@@ -10,7 +10,7 @@
 4. Vào ô ChatGPT, Gemini, Claude hoặc Grok trên trang chủ và làm theo hướng dẫn tương ứng. Tài khoản vẫn phải có tính năng MCP/Custom apps mà nhà cung cấp yêu cầu. Với ChatGPT cần Tunnel ID và Runtime API Key; không dùng session token/cookie. Với Gemini/Claude/Grok, bấm **Tạo URL và kết nối**: ứng dụng tự chạy tunnel, bật cổng và hiện URL MCP có `/mcp` để copy sang website AI. Các file `START-...-TUNNEL.cmd` chỉ là phương án thủ công cũ.
 5. Đóng cửa sổ Code Bridge và các cửa sổ tunnel để dừng kết nối. Mở lại ứng dụng khi cần; Runtime API Key ChatGPT phải nhập lại và quyền OAuth của Gemini/Claude/Grok cần cấp lại. URL Quick Tunnel có thể đổi sau mỗi lần chạy.
 
-Nếu nút **Tạo URL và kết nối** báo phiên cũ hoặc hiện lỗi `Unexpected token '<'`, trang giao diện mới đang nói chuyện với tiến trình Code Bridge cũ trên cùng cổng. Hoàn tất phiên đang dùng, đóng cửa sổ Code Bridge cũ, mở `CodeBridge.exe` từ bản 0.3.3 đã giải nén, rồi tải lại trang. Việc chỉ làm mới trang sẽ không cập nhật backend đang chạy.
+Nếu nút **Tạo URL và kết nối** báo phiên cũ hoặc hiện lỗi `Unexpected token '<'`, trang giao diện mới đang nói chuyện với tiến trình Code Bridge cũ trên cùng cổng. Hoàn tất phiên đang dùng, đóng cửa sổ Code Bridge cũ, mở `CodeBridge.exe` từ bản 0.3.4 đã giải nén, rồi tải lại trang. Việc chỉ làm mới trang sẽ không cập nhật backend đang chạy.
 
 Cấu hình của bản portable nằm ở `%LOCALAPPDATA%\CodeBridge` của tài khoản Windows đang dùng; không nằm trong ZIP. Mỗi người dùng Windows có cấu hình riêng. Chuyển ZIP sang máy khác không chuyển tài khoản, token hay quyền truy cập. Nếu di chuyển thư mục đã giải nén, vào **Dự án & file** chọn lại workspace vì đường dẫn cũ có thể không còn tồn tại.
 
@@ -28,6 +28,6 @@ npm run build
 npm run package:win
 ```
 
-Kết quả là `dist/CodeBridge-0.3.3-win-x64.zip` và file `.zip.sha256` đi kèm. Script tải Node.js, OpenAI tunnel-client và cloudflared từ bản phát hành chính thức, đối chiếu SHA-256 đã ghim; cài dependency production bằng `npm ci`; sau đó đóng gói. `dist/` được bỏ qua bởi Git. Kiểm tra file nhận được bằng SHA-256 trước khi phát cho người khác. Khi cập nhật runtime, sửa cả URL và checksum ghim trong `scripts/package-windows.mjs`, rồi build và kiểm thử lại.
+Kết quả là `dist/CodeBridge-0.3.4-win-x64.zip` và file `.zip.sha256` đi kèm. Script tải Node.js, OpenAI tunnel-client và cloudflared từ bản phát hành chính thức, đối chiếu SHA-256 đã ghim; cài dependency production bằng `npm ci`; sau đó đóng gói. `dist/` được bỏ qua bởi Git. Kiểm tra file nhận được bằng SHA-256 trước khi phát cho người khác. Khi cập nhật runtime, sửa cả URL và checksum ghim trong `scripts/package-windows.mjs`, rồi build và kiểm thử lại.
 
 Đây là gói portable, chưa có bộ cài `.msi`, tự cập nhật hoặc chữ ký số. Chúng tôi đã kiểm tra native Windows cho mở dashboard và gọi công cụ Filesystem MCP; kết nối end-to-end tới tài khoản ChatGPT/Gemini/Claude/Grok vẫn cần tài khoản và quyền tương ứng để thử trên từng máy.

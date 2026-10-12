@@ -107,7 +107,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
       if (!entry || !enabled) throw new InvalidTokenError('Invalid or expired access token');
       let grant;
       try { grant = currentGrant(entry.grantId); } catch { throw new InvalidTokenError('Grant expired or workspace changed'); }
-      return { token, clientId: entry.clientId, scopes: ['mcp'], expiresAt: entry.expiresAt, resource: endpoint(), extra: { workspace: grant.workspace, allowWrites: grant.allowWrites, grantId: grant.id } };
+      return { token, clientId: entry.clientId, scopes: ['mcp'], expiresAt: entry.expiresAt, resource: endpoint(), extra: { workspace: grant.workspace, allowWrites: grant.allowWrites, allowTerminal: grant.allowTerminal === true, grantId: grant.id } };
     },
     async revokeToken(client, request) {
       const key = digest(request.token), entry = tokens.get(key) || refreshTokens.get(key);
@@ -119,15 +119,18 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
   };
   function status() {
     clean();
-    const connections = [...grants.values()].filter(g => g.authorizedAt && g.workspace === getContext().workspace).map(g => ({ id: g.id, provider: providerName, label: g.label, clientName: g.clientName, state: 'authorized', workspace: g.workspace, allowWrites: g.allowWrites && getContext().allowWrites, startedAt: g.authorizedAt, lastCallAt: g.lastCallAt || null, expiresAt: g.expiresAt }));
+    const connections = [...grants.values()].filter(g => g.authorizedAt && g.workspace === getContext().workspace).map(g => ({ id: g.id, provider: providerName, label: g.label, clientName: g.clientName, state: 'authorized', workspace: g.workspace, allowWrites: g.allowWrites && getContext().allowWrites, allowTerminal: g.allowTerminal === true && getContext().allowTerminal === true, startedAt: g.authorizedAt, lastCallAt: g.lastCallAt || null, expiresAt: g.expiresAt }));
     return { enabled, publicOrigin, endpoint: publicOrigin ? endpoint() : '', localTarget: `http://127.0.0.1:${port}`, lastCallAt, grantedCount: connections.length, connections,
       pending: [...pending.values()].filter(p => p.status === 'pending').map(p => ({ id: p.id, clientName: p.clientName, redirectUri: p.params.redirectUri, workspace: p.workspace, allowWrites: p.allowWrites, expiresAt: p.expiresAt })) };
   }
-  function approve(id, label) {
+  function approve(id, label, allowTerminal = false) {
     clean(); const entry = pending.get(id), context = getContext();
     if (!entry || entry.status !== 'pending' || entry.workspace !== context.workspace) throw new Error('Yêu cầu hết hạn hoặc workspace đã đổi.');
     if (grants.size >= 30) throw new Error('Đã đạt giới hạn kết nối. Hãy thu hồi các kết nối cũ.');
     entry.allowWrites = entry.allowWrites && context.allowWrites;
+    if (typeof allowTerminal !== 'boolean') throw new Error('allowTerminal phải là boolean.');
+    if (allowTerminal && !context.allowTerminal) throw new Error('Hãy bật quyền terminal trên máy trước khi duyệt kết nối.');
+    entry.allowTerminal = allowTerminal;
     entry.label = label === undefined || label === '' ? entry.clientName : checkedLabel(label);
     entry.status = 'approved';
     log(`${providerName}:approve`, true);
@@ -183,7 +186,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
         if (entry.status === 'denied') redirect.searchParams.set('error', 'access_denied');
         else {
           if (grants.size >= 30) { pending.delete(entry.id); return res.status(429).send('Đã đạt giới hạn kết nối. Thu hồi kết nối cũ rồi thử lại.'); }
-          const grant = { id: nonce(), clientId: entry.clientId, clientName: entry.clientName, label: entry.label, workspace: entry.workspace, allowWrites: entry.allowWrites, expiresAt: now() + 8 * 3600 };
+          const grant = { id: nonce(), clientId: entry.clientId, clientName: entry.clientName, label: entry.label, workspace: entry.workspace, allowWrites: entry.allowWrites, allowTerminal: entry.allowTerminal === true && getContext().allowTerminal === true, expiresAt: now() + 8 * 3600 };
           grants.set(grant.id, grant);
           const code = nonce();
           codes.set(digest(code), { clientId: entry.clientId, grantId: grant.id, challenge: entry.params.codeChallenge, redirectUri: entry.params.redirectUri, expiresAt: now() + 60 });
