@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { createRemoteAccess, validatePublicOrigin } from '../src/remote-access.mjs';
 
 const issuer = 'https://bridge.example.com', port = 3240;
@@ -19,9 +22,12 @@ test('public URL validation', () => {
   assert.equal(validatePublicOrigin(issuer + '/'), issuer);
 });
 test('remote OAuth requires local consent and enforces grant boundaries', async t => {
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'bridge-oauth-test-'));
+  const stateFile = path.join(stateDir, 'oauth.json');
   let context = { workspace: '/workspace/one', allowWrites: true, allowTerminal: false };
-  const gateway = createRemoteAccess({ port, getContext: () => context, handleMcp: (req, res) => res.json({ ok: true, workspace: req.auth.extra.workspace, allowWrites: req.auth.extra.allowWrites, allowTerminal: req.auth.extra.allowTerminal }) });
-  t.after(() => gateway.close());
+  const options = { port, getContext: () => context, stateFile, handleMcp: (req, res) => res.json({ ok: true, workspace: req.auth.extra.workspace, allowWrites: req.auth.extra.allowWrites, allowTerminal: req.auth.extra.allowTerminal }) };
+  const gateway = createRemoteAccess(options);
+  t.after(async () => { await gateway.close(); await rm(stateDir, { recursive: true, force: true }); });
   await gateway.enable(issuer);
   let registration;
   const verifier = randomBytes(32).toString('base64url');
@@ -112,6 +118,20 @@ test('remote OAuth requires local consent and enforces grant boundaries', async 
     context.allowTerminal = true;
     gateway.revokeAll();
   });
+  await t.test('pause and resume reuse the same OAuth token without a new setup', async () => {
+    const issued = (await exchange(await authorize())).json();
+    const auth = { Authorization: 'Bearer ' + issued.access_token };
+    const grant = gateway.status().connections[0];
+    assert.equal((await http('/mcp', {}, auth)).status, 200);
+    gateway.pause(grant.id);
+    assert.equal(gateway.status().connections[0].state, 'paused');
+    assert.throws(() => gateway.validateGrant(grant.id), /paused/);
+    assert.equal((await http('/mcp', {}, auth)).status, 503);
+    gateway.resume(grant.id);
+    assert.equal(gateway.status().connections[0].state, 'authorized');
+    assert.equal((await http('/mcp', {}, auth)).status, 200);
+    gateway.revokeAll();
+  });
   await t.test('read-only grants do not gain writes and workspace changes invalidate', async () => {
     context.allowWrites = false;
     const issued = (await exchange(await authorize())).json();
@@ -140,6 +160,24 @@ test('remote OAuth requires local consent and enforces grant boundaries', async 
     assert.equal(gateway.status().connections[0].id, second.id);
     assert.equal(gateway.status().grantedCount, 1);
     gateway.revokeAll();
+  });
+  await t.test('stable URL restores a paused grant and token after restart', async () => {
+    const issued = (await exchange(await authorize())).json();
+    const auth = { Authorization: 'Bearer ' + issued.access_token };
+    const grantId = gateway.status().connections[0].id;
+    gateway.pause(grantId);
+    await gateway.close();
+    const stored = await readFile(stateFile, 'utf8');
+    assert.ok(!stored.includes(issued.access_token));
+    assert.ok(!stored.includes(issued.refresh_token));
+    const restored = createRemoteAccess(options);
+    try {
+      await restored.enable(issuer);
+      assert.equal(restored.status().connections[0].state, 'paused');
+      assert.equal((await http('/mcp', {}, auth)).status, 503);
+      restored.resume(grantId);
+      assert.equal((await http('/mcp', {}, auth)).status, 200);
+    } finally { await restored.disable(); }
   });
   await t.test('explicit disable clears authorization', async () => { await gateway.disable(); assert.equal(gateway.status().enabled, false); assert.equal(gateway.status().endpoint, ''); });
 });

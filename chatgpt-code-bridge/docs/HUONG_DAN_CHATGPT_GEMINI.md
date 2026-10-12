@@ -6,7 +6,7 @@
 
 | Câu hỏi | Trạng thái của bản hiện tại |
 | --- | --- |
-| Tắt máy rồi bật lại có phải kết nối lại? | **Có.** Mở lại Code Bridge. Với ChatGPT, cấu hình tên và Tunnel ID còn lưu nhưng tunnel đã dừng; nhập lại Runtime API Key và bấm kết nối. Với Gemini, cổng OAuth và các quyền đã cấp chỉ ở bộ nhớ; bật lại cổng và duyệt kết nối mới. |
+| Tắt máy rồi bật lại có phải kết nối lại? | Với ChatGPT, cấu hình tên và Tunnel ID còn lưu nhưng cần nhập lại Runtime API Key. Với Gemini dùng **URL HTTPS cố định**, Code Bridge tự khôi phục cổng local và quyền OAuth còn hạn; tunnel/reverse proxy bên ngoài cũng phải chạy lại. Với **Quick Tunnel**, URL đổi sau khi chạy lại nên phải cập nhật Custom app trong Gemini và duyệt kết nối mới. |
 | Người khác dùng ChatGPT/Gemini có đọc được máy tôi? | **Không chỉ vì họ đang dùng cùng chatbot.** Họ cần thực sự được cấp quyền dùng app/tunnel ChatGPT hoặc được bạn duyệt OAuth Gemini. Khi đã có quyền, họ có thể dùng các công cụ đối với **toàn bộ workspace đang chọn**, theo quyền đọc/ghi của kết nối. |
 | Một máy dùng nhiều tài khoản ChatGPT được không? | Bridge hỗ trợ **tối đa 12 cấu hình ChatGPT**, có thể chạy nhiều tunnel cùng lúc. Mỗi cấu hình đang chạy phải có Tunnel ID riêng và Runtime API Key hợp lệ. Việc nhiều tài khoản ChatGPT nhìn thấy/dùng các tunnel đó còn tùy quyền và liên kết organization/workspace của OpenAI. Số cấu hình không phải số tài khoản duy nhất. |
 | ChatGPT và Gemini có chạy cùng lúc không? | **Có.** Bật cổng Gemini không dừng tunnel ChatGPT; thêm tunnel ChatGPT không thu hồi quyền Gemini. Cả hai dùng chung workspace và công tắc **Cho phép sửa file**. |
@@ -63,14 +63,14 @@ Trên `gemini.google.com`, mở **Cài đặt** (biểu tượng bánh răng ở
 
 1. Mở Code Bridge cổng **3213** → ô **Gemini** → **Thiết lập Gemini**. Kiểm tra workspace và quyền ghi trước khi duyệt bất kỳ kết nối nào. Tunnel ChatGPT đang chạy sẽ được giữ nguyên.
 2. Bấm **Tạo URL và kết nối Gemini**. Code Bridge tự cài `cloudflared` từ bản phát hành chính thức nếu cần, kiểm tra SHA-256, chạy tunnel và bật cổng MCP/OAuth `http://127.0.0.1:3212`. Chờ trạng thái **URL đã sẵn sàng**. Không trỏ URL công khai vào dashboard cổng 3213/3210.
-3. URL HTTPS gốc sẽ hiện tự động bên trái. Nếu bạn có URL HTTPS hoặc reverse proxy riêng, mở **Dùng URL HTTPS riêng (nâng cao)** để nhập thủ công; URL gốc ở đó không có `/mcp`.
+3. URL HTTPS gốc sẽ hiện tự động bên trái. Nếu bạn có URL HTTPS hoặc reverse proxy riêng, mở **Dùng lại kết nối sau khi bật máy · URL HTTPS cố định** để nhập thủ công; URL gốc ở đó không có `/mcp`.
 4. Ở ô bên phải, bấm **Copy URL MCP để dán vào Gemini**. URL được copy phải có dạng `https://abc.trycloudflare.com/mcp`. Trong Gemini Web → **Cài đặt → Ứng dụng đã kết nối** (hoặc **Trí thông minh cá nhân → Ứng dụng đã kết nối**) → **Ứng dụng tùy chỉnh cho Spark**, dán **URL có `/mcp`** vào ô **URL của máy chủ MCP** rồi bấm **Tiếp theo**. Không dán URL gốc `https://abc.trycloudflare.com` vào Gemini: Google sẽ báo đó không phải máy chủ MCP hợp lệ. Nếu trang duyệt kết nối của Code Bridge mở ra, giữ trang đó mở.
 5. Quay lại Code Bridge → Gemini → **Yêu cầu kết nối**. Đối chiếu **mã yêu cầu** và **địa chỉ trả về (callback URL)** với trang đang chờ; bấm **Cho phép** nếu đúng yêu cầu của bạn. Tên ứng dụng hiển thị là tên client tự khai, không chứng minh danh tính tài khoản Google. Nếu không nhận ra yêu cầu, bấm **Từ chối**.
 6. Trở lại Gemini. Trong chat, gõ `@` và chọn custom app vừa thêm (tên có thể do bạn đặt, chẳng hạn `geminiVibe`); yêu cầu: “Hãy dùng Code Bridge để liệt kê thư mục được phép và đọc `index.html` trong dự án. Chưa sửa file.” Xem **Nhật ký hoạt động** để biết bridge đã nhận lệnh công cụ chưa. “Cổng local đã bật” chỉ nói cổng 3212 đang chạy; “1 quyền đã cấp” nghĩa là một luồng OAuth đã hoàn tất, chưa chứng minh Gemini đã gọi công cụ đọc file.
 
 ### Nhiều tài khoản Gemini
 
-Có thể cho nhiều tài khoản **đủ điều kiện** dùng cùng URL MCP; bạn duyệt từng yêu cầu riêng trên máy. Bridge lưu tối đa **30 quyền còn hạn** và cho phép đặt tên, thu hồi riêng từng quyền. Một tài khoản kết nối lại có thể tạo nhiều quyền; bộ đếm không phải số người duy nhất. Quyền gắn với workspace và trạng thái cho phép ghi **khi duyệt**. Nếu đã duyệt chỉ đọc, việc bật ghi sau đó không tự nâng quyền cũ; kết nối lại và duyệt lại nếu muốn cấp quyền ghi.
+Có thể cho nhiều tài khoản **đủ điều kiện** dùng cùng URL MCP; bạn duyệt từng yêu cầu riêng trên máy. Bridge lưu tối đa **30 quyền còn hạn** và cho phép đặt tên, tạm dừng/kết nối lại hoặc thu hồi riêng từng quyền. Tạm dừng giữ nguyên OAuth trong thời hạn quyền; kết nối lại không cần thêm Custom app. Một tài khoản kết nối lại có thể tạo nhiều quyền; bộ đếm không phải số người duy nhất. Quyền gắn với workspace và trạng thái cho phép ghi **khi duyệt**. Nếu đã duyệt chỉ đọc, việc bật ghi sau đó không tự nâng quyền cũ; kết nối lại và duyệt lại nếu muốn cấp quyền ghi.
 
 ### Gemini báo “chỉ có quyền đọc” khi bạn muốn sửa file
 
@@ -83,11 +83,13 @@ Không thể nâng quyền cho token đã cấp khi chỉ đọc bằng cách b�
 
 ### Sau khi khởi động lại
 
-1. Chạy lại Code Bridge, vào ô Gemini và bấm **Tạo URL và kết nối Gemini**.
-2. Nếu dùng Cloudflare Quick Tunnel, URL có thể thay đổi sau mỗi lần chạy; cập nhật URL MCP trong Custom apps của Gemini hoặc thêm lại app theo giao diện Google.
-3. Bắt đầu kết nối lại từ Gemini và duyệt yêu cầu mới trên dashboard. Các quyền cũ không tồn tại sau khi ứng dụng đóng. Với domain HTTPS cố định, địa chỉ app có thể giữ nguyên nhưng vẫn phải cấp quyền OAuth mới.
+Để dùng lại **cùng một Custom app** mà không thay URL, thiết lập một lần [Cloudflare Named Tunnel với hostname cố định](https://developers.cloudflare.com/tunnel/get-started/) hoặc một reverse proxy HTTPS cố định. Cloudflare yêu cầu tài khoản và domain để xuất bản hostname; trong dashboard tạo tunnel, thêm Published application route và đặt Service URL là `http://127.0.0.1:3212` (không phải dashboard `3213`). Trong Code Bridge → Gemini → **Hướng dẫn kết nối → Dùng lại kết nối sau khi bật máy · URL HTTPS cố định**, nhập URL gốc như `https://bridge.example.com`; Code Bridge sẽ tạo `https://bridge.example.com/mcp` để dán vào Gemini. Cấu hình tunnel/reverse proxy chạy cùng hệ điều hành khi máy mở lại. Code Bridge sẽ tự bật cổng local và nạp quyền OAuth còn hạn khi bạn mở ứng dụng.
 
-Quyền Gemini trong bridge tối đa **8 giờ**; access token sống **15 phút** và có thể được làm mới trong thời hạn quyền. Bấm **Thu hồi** ở từng kết nối hoặc **Thu hồi toàn bộ quyền** để ngắt ngay. Bấm **Dừng URL** để dừng Quick Tunnel và đóng cổng MCP/OAuth.
+1. Nếu dùng **URL HTTPS cố định**, chạy lại Code Bridge. Cổng local tự bật, quyền OAuth còn hạn được khôi phục và app Gemini vẫn giữ nguyên URL MCP. Kiểm tra Named Tunnel hoặc reverse proxy bên ngoài cũng đã chạy lại, trỏ vào `http://127.0.0.1:3212`.
+2. Trong **Quản lý kết nối**, nếu dòng quyền đang **Đã tạm dừng**, bấm **Kết nối lại**. Không cần tạo Custom app hoặc duyệt OAuth lần nữa. Nếu quyền đã hết hạn hoặc bị thu hồi, xác thực lại từ Gemini.
+3. Nếu dùng **Cloudflare Quick Tunnel**, bấm **Tạo URL và kết nối Gemini**. URL có thể thay đổi sau mỗi lần chạy; cập nhật URL MCP trong Custom apps của Gemini hoặc thêm lại app theo giao diện Google, rồi duyệt yêu cầu mới.
+
+Quyền Gemini dùng Quick Tunnel tối đa **8 giờ**; với URL cố định, quyền được làm mới tối đa **30 ngày** từ lần dùng gần nhất. Access token sống **15 phút** và có thể được làm mới trong thời hạn quyền. Bấm **Tạm dừng** để tạm chặn một kết nối mà không mất quyền; bấm **Kết nối lại** để dùng tiếp. **Thu hồi**, **Dừng URL** hoặc **Tắt cổng** xóa quyền OAuth tương ứng.
 
 ## 4. Ai thực sự có thể xem file trên máy?
 

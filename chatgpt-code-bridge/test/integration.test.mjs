@@ -150,6 +150,12 @@ test('MCP HTTP, workspace boundaries, permissions and local UI', { timeout: 1200
       const denied = await gemini.callTool({ name: 'write_file', arguments: { path: 'should-not-exist.txt', content: 'bad' } }).catch(error => error);
       assert.ok(denied instanceof Error || denied.isError);
       const after = await (await fetch(base + '/api/status')).json(); assert.ok(after.events.some(event => event.action === 'gemini:read_text_file'));
+      const grantId = after.gemini.connections[0].id;
+      assert.equal((await post('/api/gemini/pause', { id: grantId })).status, 200);
+      assert.equal((await (await fetch(base + '/api/status')).json()).gemini.connections[0].state, 'paused');
+      assert.equal((await fetch(gateway + '/mcp', { method: 'POST', headers: { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' }, body: '{}' })).status, 503);
+      assert.equal((await post('/api/gemini/resume', { id: grantId })).status, 200);
+      assert.match((await gemini.callTool({ name: 'read_text_file', arguments: { path: 'index.html' } })).content[0].text, /Xin chào/);
       await post('/api/workspace', { path: workspace });
       const revoked = await fetch(gateway + '/mcp', { method: 'POST', headers: { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' }, body: '{}' }); assert.equal(revoked.status, 401);
     } finally { await gemini.close(); await post('/api/gemini/disable', {}); }

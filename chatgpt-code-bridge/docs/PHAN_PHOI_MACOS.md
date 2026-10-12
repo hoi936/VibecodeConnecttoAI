@@ -1,12 +1,12 @@
 # Code Bridge trên macOS
 
-Code Bridge 0.3.4 có hai gói: `CodeBridge-0.3.4-mac-arm64.app.zip` cho Mac Apple Silicon và `CodeBridge-0.3.4-mac-x64.app.zip` cho Mac Intel. Giải nén, kéo `CodeBridge.app` vào Applications rồi mở ứng dụng. Một cửa sổ Terminal sẽ hiện và trình duyệt tự mở `http://127.0.0.1:3213/`. Giữ Terminal mở khi sử dụng; nhấn **Ctrl+C** trong cửa sổ đó để dừng cổng MCP và các tunnel.
+Code Bridge 0.3.5 có hai gói: `CodeBridge-0.3.5-mac-arm64.app.zip` cho Mac Apple Silicon và `CodeBridge-0.3.5-mac-x64.app.zip` cho Mac Intel. Giải nén, kéo `CodeBridge.app` vào Applications rồi mở ứng dụng. Một cửa sổ Terminal sẽ hiện và trình duyệt tự mở `http://127.0.0.1:3213/`. Giữ Terminal mở khi sử dụng; nhấn **Ctrl+C** trong cửa sổ đó để dừng cổng MCP và các tunnel.
 
 Nếu tạo gói **trên Mac**, lệnh đóng gói còn tạo file `.dmg` cùng kiến trúc. Mở DMG rồi kéo `CodeBridge.app` vào biểu tượng Applications. Bản `.app.zip` được tạo trong WSL/Linux là gói macOS có đủ runtime, nhưng **chưa được chạy thử trên macOS**. Ứng dụng chưa được ký số hoặc notarize; tùy cài đặt bảo mật của máy, macOS có thể yêu cầu bạn xác nhận trước khi mở.
 
 Kho mã có workflow **Build Code Bridge macOS**. Mỗi lần push thay đổi Code Bridge lên nhánh `dev`, GitHub Actions chạy trên macOS, tạo và kiểm tra hai DMG, rồi lưu chúng ở phần **Actions → Artifacts** của lần chạy tương ứng. Artifact có thời hạn 14 ngày. Workflow cũng có thể chạy thủ công bằng `workflow_dispatch`.
 
-Sau khi mở, vào **Dự án & file** để chọn thư mục dự án trên Mac. `demo-project` trong gói chỉ là ví dụ. Dữ liệu cấu hình được lưu ở `~/Library/Application Support/CodeBridge`, tách khỏi thư mục ứng dụng. Mỗi tài khoản macOS có cấu hình riêng. Runtime API Key ChatGPT chỉ giữ trong bộ nhớ; quyền OAuth của Gemini/Claude/Grok cần cấp lại sau khi đóng ứng dụng. URL Quick Tunnel có thể thay đổi mỗi lần mở lại.
+Sau khi mở, vào **Dự án & file** để chọn thư mục dự án trên Mac. `demo-project` trong gói chỉ là ví dụ. Dữ liệu cấu hình được lưu ở `~/Library/Application Support/CodeBridge`, tách khỏi thư mục ứng dụng. Mỗi tài khoản macOS có cấu hình riêng. Runtime API Key ChatGPT chỉ giữ trong bộ nhớ. Với URL HTTPS cố định, quyền OAuth Gemini/Claude/Grok còn hạn được khôi phục nếu tunnel bên ngoài đang chạy; Quick Tunnel đổi URL khi chạy lại nên phải cập nhật connector và duyệt quyền mới.
 
 Nếu cổng 3213 đang được một phiên khác dùng, hãy dừng phiên đó trước khi mở Code Bridge. Bản Mac kèm Node.js, Filesystem MCP, OpenAI tunnel-client và cloudflared đúng kiến trúc; máy nhận không cần cài Node hay Homebrew. Gói chỉ chứa `demo-project/index.html`, không chứa các thư mục dự án cá nhân.
 

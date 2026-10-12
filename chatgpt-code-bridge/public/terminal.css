@@ -15,3 +15,4 @@
 .terminal-grant { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; color: #704a1f; line-height: 1.5; }
 .terminal-grant input { flex: none; margin-top: 3px; accent-color: #8c652f; }
 @media (max-width: 720px) { .terminal-permission { flex-direction: column; } }
+.badge.paused { background: #fff3e8; color: #9a602f; }

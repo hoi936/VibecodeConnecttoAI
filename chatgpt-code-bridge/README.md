@@ -1,4 +1,4 @@
-# Code Bridge 0.3.4 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
+# Code Bridge 0.3.5 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
 
 Ứng dụng local cho mô hình **ChatGPT Web → OpenAI Secure MCP Tunnel → Filesystem MCP → workspace trên máy**.
 
@@ -75,13 +75,15 @@ Mở **http://127.0.0.1:3213** và chọn ô **Gemini**; có thể giữ các tu
 
 1. Chọn workspace trên dashboard.
 2. Bấm **Tạo URL và kết nối Gemini**. Code Bridge tự cài cloudflared từ bản phát hành chính thức nếu cần, kiểm tra SHA-256, chạy Quick Tunnel và bật cổng MCP/OAuth 3212. URL chỉ được tạo sau khi bạn bấm nút; không trỏ tunnel vào dashboard 3210/3213.
-3. Chờ giao diện báo URL sẵn sàng. Nếu đã có domain HTTPS hoặc tunnel riêng, dùng mục **Dùng URL HTTPS riêng (nâng cao)**.
+3. Chờ giao diện báo URL sẵn sàng. Nếu đã có domain HTTPS hoặc tunnel riêng, dùng mục **Dùng lại kết nối sau khi bật máy · URL HTTPS cố định**.
 4. Copy URL MCP hiển thị, thêm vào Custom apps của Gemini. Khi trang xác thực xuất hiện, giữ trang đó mở, quay lại dashboard → **Yêu cầu kết nối**, đối chiếu mã và callback URL, bấm **Cho phép**. Tên ứng dụng là thông tin do client tự khai báo, không phải chứng nhận của Google.
 5. Trang xác thực tự trở lại Gemini. Dùng `@` chọn app rồi thử yêu cầu đọc file. Nút **Thu hồi toàn bộ quyền** hủy các token hiện tại; **Tắt** đóng cổng Gemini.
 
 Có thể thay Quick Tunnel bằng domain HTTPS cố định và reverse proxy đến `http://127.0.0.1:3212`. Quick Tunnel dành cho thử nghiệm, URL đổi mỗi lần chạy và không hỗ trợ SSE; bridge dùng Streamable HTTP trả JSON. Tham khảo https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/.
 
-OAuth của bridge dùng SDK MCP: discovery metadata, DCR, Authorization Code + PKCE S256, refresh token rotation và revoke. Duyệt kết nối chỉ thực hiện qua dashboard local có CSRF. Quyền đã cấp gắn với workspace và quyền ghi lúc duyệt; bật ghi sau đó không nâng quyền của một token chỉ đọc. Đổi workspace thu hồi toàn bộ quyền Gemini. Access token sống 15 phút, quyền/refresh token tối đa 8 giờ, authorization code dùng một lần trong 60 giây. Mọi trạng thái OAuth nằm trong bộ nhớ; đóng app hoặc đổi URL cần kết nối lại từ Gemini.
+Trong **Gemini/Claude/Grok → Quản lý kết nối**, bấm **Tạm dừng** để chặn riêng một quyền mà vẫn giữ URL và phiên OAuth; bấm **Kết nối lại** để dùng tiếp trong hạn quyền. Đừng bấm **Dừng URL** hoặc **Tắt cổng** nếu chỉ muốn nghỉ tạm: hai nút đó thu hồi quyền. Với URL HTTPS cố định, Code Bridge tự bật lại cổng local và khôi phục các quyền OAuth còn hạn khi mở lại ứng dụng; reverse proxy hoặc Named Tunnel bên ngoài cũng phải tự chạy lại. Quick Tunnel có hostname ngẫu nhiên nên không thể giữ nguyên app Gemini qua lần tạo URL mới.
+
+OAuth của bridge dùng SDK MCP: discovery metadata, DCR, Authorization Code + PKCE S256, refresh token rotation và revoke. Duyệt kết nối chỉ thực hiện qua dashboard local có CSRF. Quyền đã cấp gắn với workspace và quyền ghi lúc duyệt; bật ghi sau đó không nâng quyền của một token chỉ đọc. Đổi workspace thu hồi toàn bộ quyền Gemini. Access token sống 15 phút; quyền/refresh token tối đa 8 giờ với Quick Tunnel hoặc 30 ngày kể từ lần làm mới gần nhất với URL HTTPS cố định; authorization code dùng một lần trong 60 giây. Với URL cố định, Code Bridge lưu metadata OAuth và **bản băm** token trong `BRIDGE_DATA_DIR/oauth-<provider>.json` (quyền tệp chỉ chủ máy); không lưu token dạng nguyên văn. Tắt cổng hoặc đổi URL thu hồi quyền.
 
 Đã chuẩn bị kết nối theo chuẩn MCP/OAuth; luồng Gemini Web cần được kiểm tra lại sau mỗi thay đổi giao diện hoặc URL tunnel. Không dùng OpenAI Tunnel ID cho Gemini.
 
@@ -111,7 +113,7 @@ Từ trang chủ chọn **Claude** hoặc **Grok**, rồi bấm **Tạo URL và 
 
 API quản trị và MCP chỉ bind loopback. API thao tác yêu cầu CSRF token; kiểm tra Host/Origin chặn website bên ngoài gọi trực tiếp. Preview chặn file ẩn, node_modules và symlink ra ngoài workspace. MCP được cấp quyền trên toàn bộ workspace đã chọn, bao gồm file cấu hình trong đó: hãy chọn đúng thư mục dự án.
 
-Config workspace/quyền ghi/danh sách Tunnel ID/URL Gemini nằm trong thư mục `BRIDGE_DATA_DIR`, không chứa Runtime API Key hoặc OAuth token. Bản này là prototype cho một người dùng, chưa có multi-user, durable audit, checkpoint/undo hoặc trình cài đặt hệ thống. Bản Windows portable không cần cài đặt.
+Config workspace/quyền ghi/danh sách Tunnel ID/URL Gemini nằm trong thư mục `BRIDGE_DATA_DIR`, không chứa Runtime API Key. URL cố định lưu bản băm token OAuth và thông tin quyền tại đó để khôi phục phiên; hãy bảo vệ thư mục dữ liệu của tài khoản máy. Bản này là prototype cho một người dùng, chưa có multi-user, durable audit, checkpoint/undo hoặc trình cài đặt hệ thống. Bản Windows portable không cần cài đặt.
 
 ### Quyền terminal
 
