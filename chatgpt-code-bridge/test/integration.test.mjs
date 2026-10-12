@@ -21,7 +21,7 @@ test('MCP HTTP, workspace boundaries, permissions and local UI', { timeout: 1200
   await writeFile(path.join(temp, 'outside.txt'), 'outside');
   await symlink(path.join(temp, 'outside.txt'), path.join(workspace, 'escape.txt'));
   await writeFile(path.join(stateDir, 'config.json'), JSON.stringify({ workspace, allowWrites: true, tunnelId: '' }));
-  const child = spawn(process.execPath, ['src/server.mjs'], { cwd: root, env: { ...process.env, BRIDGE_PORT: '3220', BRIDGE_DATA_DIR: stateDir, GEMINI_GATEWAY_PORT: '3232' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['src/server.mjs'], { cwd: root, env: { ...process.env, BRIDGE_PORT: '3220', BRIDGE_DATA_DIR: stateDir, GEMINI_GATEWAY_PORT: '3232', CLAUDE_GATEWAY_PORT: '3233', GROK_GATEWAY_PORT: '3234' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
   child.stdout.on('data', c => output += c); child.stderr.on('data', c => output += c);
   const mcp = new Client({ name: 'integration-test', version: '1.0.0' });
@@ -101,15 +101,13 @@ test('MCP HTTP, workspace boundaries, permissions and local UI', { timeout: 1200
     assert.ok(!(await readFile(path.join(stateDir, 'config.json'), 'utf8')).includes('apiKey'));
     assert.equal((await fetch(base + '/mcp')).status, 405);
   });
-  await t.test('Gemini gateway routes actual MCP calls and preserves readonly consent', async () => {
-    assert.equal((await post('/api/gemini/enable', { publicOrigin: 'https://integration.example.com' })).status, 400);
-    assert.equal((await post('/api/mode', { mode: 'gemini' })).status, 200);
-    assert.equal((await post('/api/tunnel/start', { tunnelId: 'tunnel_wrong_mode', apiKey: 'sk-test' })).status, 400);
-    const blocked = await fetch(base + '/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    assert.equal(blocked.status, 400);
+  await t.test('ChatGPT MCP and Gemini gateway stay available together', async () => {
     const origin = 'https://integration.example.com', gateway = 'http://127.0.0.1:3232';
     assert.equal((await post('/api/gemini/enable', { publicOrigin: 'http://localhost' })).status, 400);
     assert.equal((await post('/api/gemini/enable', { publicOrigin: origin })).status, 200);
+    assert.equal((await post('/api/connections/check', {})).status, 200);
+    const simultaneousRead = await mcp.callTool({ name: 'read_text_file', arguments: { path: 'index.html' } });
+    assert.match(simultaneousRead.content[0].text, /Xin chào/);
     await post('/api/permissions', { allowWrites: false });
     const registration = await (await fetch(gateway + '/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ redirect_uris: ['https://gemini.google.com/test-callback'], token_endpoint_auth_method: 'none', scope: 'mcp' }) })).json();
     const verifier = randomBytes(32).toString('base64url');
@@ -134,10 +132,51 @@ test('MCP HTTP, workspace boundaries, permissions and local UI', { timeout: 1200
       const after = await (await fetch(base + '/api/status')).json(); assert.ok(after.events.some(event => event.action === 'gemini:read_text_file'));
       await post('/api/workspace', { path: workspace });
       const revoked = await fetch(gateway + '/mcp', { method: 'POST', headers: { Authorization: `Bearer ${token.access_token}`, 'Content-Type': 'application/json' }, body: '{}' }); assert.equal(revoked.status, 401);
-    } finally { await gemini.close(); await post('/api/mode', { mode: 'chatgpt' }); }
+    } finally { await gemini.close(); await post('/api/gemini/disable', {}); }
     const final = await (await fetch(base + '/api/status')).json();
-    assert.equal(final.connectionMode, 'chatgpt'); assert.equal(final.gemini.enabled, false);
+    assert.equal(final.connectionMode, 'both'); assert.equal(final.gemini.enabled, false);
     assert.equal(final.summary.accountCount, null);
     assert.deepEqual(final.connections, []);
+  });
+  await t.test('Claude and Grok grants are isolated and independently revocable', async () => {
+    async function connectRemote(name, origin, port, callbackHost) {
+      const gateway = `http://127.0.0.1:${port}`;
+      assert.equal((await post(`/api/${name}/enable`, { publicOrigin: origin })).status, 200);
+      const metadata = await (await fetch(gateway + '/.well-known/oauth-protected-resource/mcp')).json();
+      assert.equal(metadata.resource, origin + '/mcp');
+      const redirectUri = `https://${callbackHost}/callback`;
+      const registration = await (await fetch(gateway + '/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ redirect_uris: [redirectUri], token_endpoint_auth_method: 'none', scope: 'mcp' }) })).json();
+      const verifier = randomBytes(32).toString('base64url');
+      const challenge = createHash('sha256').update(verifier).digest('base64url');
+      const response = await fetch(gateway + '/authorize?' + new URLSearchParams({ client_id: registration.client_id, redirect_uri: redirectUri, response_type: 'code', code_challenge_method: 'S256', code_challenge: challenge, scope: 'mcp', resource: origin + '/mcp' }), { redirect: 'manual' });
+      assert.equal(response.status, 302);
+      const pending = (await (await fetch(base + '/api/status')).json())[name].pending[0]; assert.ok(pending);
+      assert.equal((await post(`/api/${name}/approve`, { id: pending.id, label: `${name} thử nghiệm` })).status, 200);
+      const callback = await fetch(gateway + new URL(response.headers.get('location')).pathname, { redirect: 'manual' });
+      const code = new URL(callback.headers.get('location')).searchParams.get('code');
+      const token = await (await fetch(gateway + '/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: verifier, client_id: registration.client_id, redirect_uri: redirectUri }) })).json();
+      assert.ok(token.access_token);
+      return { gateway, token };
+    }
+    const claude = await connectRemote('claude', 'https://claude-bridge.example.com', 3233, 'claude.ai');
+    const grok = await connectRemote('grok', 'https://grok-bridge.example.com', 3234, 'grok.com');
+    const both = await (await fetch(base + '/api/status')).json();
+    assert.equal(both.claude.grantedCount, 1); assert.equal(both.grok.grantedCount, 1);
+    assert.ok(both.connections.some(connection => connection.provider === 'claude'));
+    assert.ok(both.connections.some(connection => connection.provider === 'grok'));
+    const claudeClient = new Client({ name: 'claude-compatible-test-client', version: '1.0.0' });
+    const grokClient = new Client({ name: 'grok-compatible-test-client', version: '1.0.0' });
+    try {
+      await claudeClient.connect(new StreamableHTTPClientTransport(new URL(claude.gateway + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${claude.token.access_token}` } } }));
+      await grokClient.connect(new StreamableHTTPClientTransport(new URL(grok.gateway + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${grok.token.access_token}` } } }));
+      assert.match((await claudeClient.callTool({ name: 'read_text_file', arguments: { path: 'index.html' } })).content[0].text, /Xin chào/);
+      assert.match((await grokClient.callTool({ name: 'read_text_file', arguments: { path: 'index.html' } })).content[0].text, /Xin chào/);
+      const cross = await fetch(grok.gateway + '/mcp', { method: 'POST', headers: { Authorization: `Bearer ${claude.token.access_token}`, 'Content-Type': 'application/json' }, body: '{}' });
+      assert.equal(cross.status, 401);
+      assert.equal((await post('/api/claude/disable', {})).status, 200);
+      const after = await (await fetch(base + '/api/status')).json();
+      assert.equal(after.claude.grantedCount, 0); assert.equal(after.grok.grantedCount, 1);
+      assert.match((await grokClient.callTool({ name: 'read_text_file', arguments: { path: 'index.html' } })).content[0].text, /Xin chào/);
+    } finally { await claudeClient.close().catch(() => {}); await grokClient.close().catch(() => {}); await post('/api/claude/disable', {}); await post('/api/grok/disable', {}); }
   });
 });

@@ -18,7 +18,7 @@ export function createTunnelManager({ binary, origin, cwd, profiles = [], log = 
     if (typeof p.id === 'string' && /^[\w-]+$/.test(p.id) && /^tunnel_[\w-]+$/.test(p.tunnelId) && typeof p.label === 'string') records.set(p.id, { ...p, state: 'stopped', error: '', lastCallAt: null });
   }
   function list() {
-    return [...records.values()].map(p => ({ id: p.id, provider: 'chatgpt', label: p.label, tunnelId: p.tunnelId, state: p.state, error: p.error, lastCallAt: p.lastCallAt, startedAt: p.startedAt || null }));
+    return [...records.values()].map(p => ({ id: p.id, provider: 'chatgpt', label: p.label, tunnelId: p.tunnelId, state: p.state, error: p.error, lastCallAt: p.lastCallAt, lastCheckedAt: p.lastCheckedAt || null, startedAt: p.startedAt || null }));
   }
   function savedProfiles() { return list().map(({ id, label, tunnelId }) => ({ id, label, tunnelId })); }
   async function start({ id, label, tunnelId, apiKey }) {
@@ -33,7 +33,7 @@ export function createTunnelManager({ binary, origin, cwd, profiles = [], log = 
     if (!id && records.size >= 12) throw new Error('Tối đa 12 cấu hình ChatGPT trên bridge này. Xóa cấu hình cũ để thêm.');
     const entry = id ? records.get(id) : { id: randomUUID(), state: 'stopped', lastCallAt: null };
     if (entry.child || entry.state === 'starting') throw new Error('Kết nối đang chạy. Dừng trước khi kết nối lại.');
-    Object.assign(entry, { label: name, tunnelId, state: 'starting', error: '', lastCallAt: null });
+    Object.assign(entry, { label: name, tunnelId, state: 'starting', error: '', lastCallAt: null, lastCheckedAt: null });
     records.set(entry.id, entry); // Reserve this Tunnel ID before awaiting a port.
     try {
       entry.healthPort = await allocatePort();
@@ -64,7 +64,7 @@ export function createTunnelManager({ binary, origin, cwd, profiles = [], log = 
     entry.state = 'stopping';
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => child.kill('SIGKILL'), 8000);
-      const deadline = setTimeout(() => { clearTimeout(timer); reject(new Error('Chưa dừng được tunnel. Chưa thể chuyển chế độ.')); }, 11000);
+      const deadline = setTimeout(() => { clearTimeout(timer); reject(new Error('Chưa dừng được tunnel. Thử lại sau.')); }, 11000);
       child.once('exit', () => { clearTimeout(timer); clearTimeout(deadline); resolve(); });
       child.kill('SIGTERM');
     });
@@ -78,13 +78,18 @@ export function createTunnelManager({ binary, origin, cwd, profiles = [], log = 
   }
   async function poll() {
     await Promise.all([...records.values()].map(async entry => {
-      if (!entry.child || entry.state === 'stopping' || entry.polling) return;
-      const child = entry.child; entry.polling = true;
-      try {
-        const response = await fetchHealth(`http://127.0.0.1:${entry.healthPort}/readyz`, { signal: AbortSignal.timeout(1500) });
-        if (entry.child === child && entry.state !== 'stopping') entry.state = response.ok ? 'ready' : 'connecting';
-      } catch { if (entry.child === child && entry.state !== 'stopping') entry.state = 'connecting'; }
-      finally { entry.polling = false; }
+      if (!entry.child || entry.state === 'stopping') return;
+      if (entry.polling) return entry.polling;
+      const child = entry.child;
+      const check = (async () => {
+        try {
+          const response = await fetchHealth(`http://127.0.0.1:${entry.healthPort}/readyz`, { signal: AbortSignal.timeout(1500) });
+          if (entry.child === child && entry.state !== 'stopping') entry.state = response.ok ? 'ready' : 'connecting';
+        } catch { if (entry.child === child && entry.state !== 'stopping') entry.state = 'connecting'; }
+        finally { if (entry.child === child) entry.lastCheckedAt = new Date().toISOString(); }
+      })();
+      entry.polling = check;
+      try { await check; } finally { if (entry.polling === check) entry.polling = null; }
     }));
   }
   return { list, savedProfiles, start, stop, stopAll, remove, touch, poll, async close() { closed = true; await stopAll(); } };

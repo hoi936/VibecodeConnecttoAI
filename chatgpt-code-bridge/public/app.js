@@ -13,18 +13,33 @@ function protect(fn) { return async event => { event?.preventDefault(); const bu
 async function refresh() {
   const previousTool = $('tool-name').value;
   state = await api('/api/status');
-  $('status').textContent = '● MCP local đang chạy';
+  if (!Array.isArray(state.connections) && location.port === '3210') {
+    $('upgrade-notice').hidden = false;
+    $('status').textContent = 'Đang mở giao diện mới trên cổng 3213…';
+    try {
+      await fetch('http://127.0.0.1:3213/health', { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(1500) });
+      location.replace(`http://127.0.0.1:3213/${location.hash || '#overview'}`);
+      return;
+    } catch {
+      $('status').textContent = 'Cổng 3213 chưa chạy · mở START-BRIDGE-LINUX.sh';
+    }
+  }
+  const readyChatgpt = (state.connections || []).filter(c => c.provider === 'chatgpt' && c.state === 'ready').length;
+  const grantedGemini = state.gemini?.grantedCount || 0;
+  $('status').textContent = `● ${readyChatgpt} ChatGPT · ${grantedGemini} Gemini · ${state.claude?.grantedCount || 0} Claude · ${state.grok?.grantedCount || 0} Grok`;
   if (document.activeElement !== $('workspace-path')) $('workspace-path').value = state.workspace;
   renderHub();
   $('allow-writes').checked = state.allowWrites;
   $('save-file').disabled = !selectedFile || !state.allowWrites;
   $('endpoint').textContent = state.endpoint;
   renderGemini();
+  renderOtherRemote();
   const statuses = { stopped: 'Chưa kết nối', starting: 'Đang khởi động', connecting: 'Đang kết nối', ready: '● Sẵn sàng', stopping: 'Đang dừng', error: 'Lỗi kết nối' };
-  const readyTunnels = (state.connections || []).filter(c => c.provider === 'chatgpt' && c.state === 'ready').length;
-  $('tunnel-status').textContent = readyTunnels ? `${readyTunnels} tunnel sẵn sàng` : statuses[state.tunnel.state] || state.tunnel.state;
-  $('tunnel-error').hidden = !state.tunnel.error;
-  $('tunnel-error').textContent = state.tunnel.error;
+  const chatgpt = (state.connections || []).filter(c => c.provider === 'chatgpt');
+  const currentTunnel = chatgpt.find(c => c.state === 'error') || chatgpt.find(c => c.state === 'connecting' || c.state === 'starting') || chatgpt[0];
+  $('tunnel-status').textContent = readyChatgpt ? `${readyChatgpt} tunnel sẵn sàng` : statuses[currentTunnel?.state] || 'Chưa kết nối';
+  $('tunnel-error').hidden = !currentTunnel?.error;
+  $('tunnel-error').textContent = currentTunnel?.error || '';
   $('tool-count').textContent = `${state.tools.length} công cụ`;
   $('tool-name').replaceChildren(...state.tools.map(t => new Option(t.name, t.name)));
   if (state.tools.some(t => t.name === previousTool)) $('tool-name').value = previousTool;
@@ -40,12 +55,19 @@ async function refresh() {
 function renderGemini() {
   const gemini = state.gemini;
   if (!gemini) { $('gemini-status').textContent = 'Cần khởi động lại Code Bridge'; for (const button of $('gemini-setup').querySelectorAll('form button')) button.disabled = true; return; }
-  $('gemini-status').textContent = gemini.enabled ? 'Cổng MCP sẵn sàng' : 'Chưa bật';
+  const pendingCount = gemini.pending.length;
+  const readOnlyCount = state.allowWrites ? gemini.connections.filter(connection => !connection.allowWrites).length : 0;
+  $('gemini-regrant-help').hidden = readOnlyCount === 0;
+  $('gemini-status').textContent = gemini.grantedCount ? `${gemini.grantedCount} quyền đã cấp` : gemini.enabled ? 'Cổng local đã bật' : 'Chưa bật';
+  $('gemini-pending-inline').textContent = String(pendingCount);
+  const setupState = $('gemini-setup-state');
+  setupState.className = 'gemini-setup-state' + (pendingCount ? ' is-pending' : readOnlyCount ? ' is-regrant' : gemini.grantedCount ? ' is-ready' : '');
+  setupState.textContent = pendingCount ? `${pendingCount} yêu cầu đang chờ. Đối chiếu mã ở phần “Yêu cầu kết nối” bên dưới trước khi cho phép.` : readOnlyCount ? `${readOnlyCount} quyền Gemini vẫn chỉ đọc dù dự án đã bật quyền sửa. Cần kết nối lại và duyệt quyền mới.` : gemini.grantedCount ? `Đã cấp ${gemini.grantedCount} quyền Gemini. Mở Gemini, chọn app bằng @ rồi thử đọc file.` : gemini.enabled ? 'Cổng local đã bật; chưa có quyền Gemini. Sao chép URL MCP có đuôi /mcp ở bên phải để thêm app trong Gemini.' : 'Chọn dự án, tạo URL HTTPS rồi bật cổng Gemini. Chưa có tài khoản nào được cấp quyền.';
   if (document.activeElement !== $('gemini-origin') && !$('gemini-origin').value) $('gemini-origin').value = state.geminiOrigin || gemini.publicOrigin || '';
   $('gemini-local-target').textContent = gemini.localTarget;
   $('gemini-endpoint').textContent = gemini.endpoint || 'Bật cổng Gemini để nhận URL MCP.';
   $('copy-gemini-endpoint').disabled = !gemini.enabled;
-  $('gemini-activity').textContent = gemini.lastCallAt ? `Lệnh MCP gần nhất: ${new Date(gemini.lastCallAt).toLocaleString('vi-VN')} · ${gemini.grantedCount} quyền kết nối` : `${gemini.grantedCount} quyền kết nối · Chưa nhận lệnh MCP qua cổng Gemini.`;
+  $('gemini-activity').textContent = gemini.lastCallAt ? `Kết nối MCP gần nhất: ${new Date(gemini.lastCallAt).toLocaleString('vi-VN')} · ${gemini.grantedCount} quyền còn hiệu lực` : `${gemini.grantedCount} quyền còn hiệu lực · Chưa có yêu cầu MCP được xác thực.`;
   const container = $('gemini-pending');
   const pendingKey = JSON.stringify({ pending: gemini.pending, allowWrites: state.allowWrites });
   if (container.dataset.requests === pendingKey) return;
@@ -64,6 +86,57 @@ function renderGemini() {
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
       button.onclick = protect(async () => { await api(`/api/gemini/${action}`, { id: request.id, label: nameInput.value.trim() }); await refresh(); notify(action === 'approve' ? 'Đã duyệt. Trở lại trang xác thực của Gemini.' : 'Đã từ chối kết nối.'); });
+      buttons.append(button);
+    }
+    card.append(title, description, redirect, context, nameLabel, buttons); container.append(card);
+  }
+}
+const remoteSites = {
+  claude: { name: 'Claude', url: 'https://claude.ai/customize/connectors', command: 'npm run claude:tunnel', info: 'Claude Web: Customize → Connectors → + Add → Add custom connector. Nếu dùng Team/Enterprise, quản trị viên phải thêm connector trước.', steps: ['Mở Customize → Connectors → + Add → Add custom connector; nhập tên Code Bridge và dán URL MCP có đuôi /mcp.', 'Chọn Sign in now hoặc Sign in when needed. Ở OAuth client, chọn Register automatically để dùng đăng ký OAuth của Code Bridge. Hoàn tất Add rồi bấm Connect.', 'Khi trang xin quyền mở, đối chiếu mã ở Code Bridge và bấm Cho phép. Trong cuộc chat, bật connector bằng nút + → Connectors rồi thử đọc file.'] },
+  grok: { name: 'Grok', url: 'https://grok.com/connectors', command: 'npm run grok:tunnel', info: 'Grok Web: Connectors → New Connector → Custom. Tài khoản Business/Enterprise có thể cần quản trị viên cấp connector trước.', steps: ['Mở grok.com/connectors → New Connector → Custom; dán URL MCP có đuôi /mcp.', 'Hoàn tất bước xác thực OAuth nếu Grok yêu cầu. Khi trang xin quyền mở, đối chiếu mã ở Code Bridge và bấm Cho phép.', 'Trở lại cuộc trò chuyện Grok, bật connector Code Bridge và yêu cầu liệt kê thư mục được phép trước khi sửa file.'] }
+};
+const remoteOriginDrafts = { claude: '', grok: '' };
+function renderOtherRemote() {
+  if (!remoteSites[selectedProvider]) return;
+  const provider = selectedProvider, site = remoteSites[provider], remote = state[provider];
+  $('remote-name-heading').textContent = site.name.toUpperCase();
+  $('remote-name-title').textContent = site.name;
+  $('remote-name-step').textContent = site.name.toUpperCase();
+  $('remote-approval-name').textContent = site.name;
+  $('remote-eligibility').textContent = site.info;
+  $('remote-tunnel-command').textContent = site.command;
+  $('enable-remote').textContent = `Bật cổng ${site.name}`;
+  $('remote-steps').replaceChildren(...site.steps.map(step => { const li = document.createElement('li'); li.textContent = step; return li; }));
+  if (!remote) { $('remote-status').textContent = 'Cần khởi động lại Code Bridge'; for (const button of $('remote-form').querySelectorAll('button')) button.disabled = true; return; }
+  $('remote-status').textContent = remote.grantedCount ? `${remote.grantedCount} quyền đã cấp` : remote.enabled ? 'Cổng local đã bật' : 'Chưa bật';
+  const pendingCount = remote.pending.length;
+  $('remote-pending-inline').textContent = String(pendingCount);
+  const setupState = $('remote-setup-state');
+  setupState.className = 'gemini-setup-state' + (pendingCount ? ' is-pending' : remote.grantedCount ? ' is-ready' : '');
+  setupState.textContent = pendingCount ? `${pendingCount} yêu cầu đang chờ. Đối chiếu mã trước khi cho phép.` : remote.grantedCount ? `Đã cấp ${remote.grantedCount} quyền ${site.name}. Hãy thử đọc file từ trang chat.` : remote.enabled ? `Cổng ${site.name} đã bật. Copy URL MCP có đuôi /mcp để thêm connector.` : `Chọn dự án, tạo URL HTTPS và bật cổng ${site.name}.`;
+  if (document.activeElement !== $('remote-origin')) $('remote-origin').value = remoteOriginDrafts[provider] || state[`${provider}Origin`] || remote.publicOrigin || '';
+  $('remote-local-target').textContent = remote.localTarget;
+  $('remote-endpoint').textContent = remote.endpoint || `Bật cổng ${site.name} để nhận URL MCP.`;
+  $('copy-remote-endpoint').disabled = !remote.enabled;
+  $('remote-activity').textContent = remote.lastCallAt ? `Lệnh MCP gần nhất: ${new Date(remote.lastCallAt).toLocaleString('vi-VN')} · ${remote.grantedCount} quyền còn hiệu lực.` : `${remote.grantedCount} quyền còn hiệu lực · Chưa có lệnh MCP được xác thực.`;
+  const container = $('remote-pending');
+  const pendingKey = JSON.stringify({ provider, pending: remote.pending, allowWrites: state.allowWrites });
+  if (container.dataset.requests === pendingKey) return;
+  container.dataset.requests = pendingKey;
+  container.replaceChildren();
+  if (!pendingCount) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = `Chưa có yêu cầu. Yêu cầu xuất hiện khi ${site.name} bắt đầu xác thực.`; container.append(p); }
+  for (const request of remote.pending) {
+    const card = document.createElement('article'); card.className = 'approval-card';
+    const title = document.createElement('h3'); title.textContent = `Mã yêu cầu: ${request.id.slice(0, 10)}`;
+    const description = document.createElement('p'); description.textContent = `Tên tự khai báo: ${request.clientName}. Đối chiếu địa chỉ trả về với trang vừa mở.`;
+    const redirect = document.createElement('code'); redirect.textContent = request.redirectUri;
+    const context = document.createElement('p'); context.textContent = `${request.allowWrites && state.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file'} trong ${request.workspace}. Hết hạn lúc ${new Date(request.expiresAt * 1000).toLocaleTimeString('vi-VN')}.`;
+    const nameLabel = document.createElement('label'); nameLabel.textContent = 'Tên để nhận biết kết nối';
+    const nameInput = document.createElement('input'); nameInput.maxLength = 80; nameInput.placeholder = `Ví dụ: ${site.name} cá nhân`; nameLabel.append(nameInput);
+    const buttons = document.createElement('div'); buttons.className = 'row';
+    for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
+      const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
+      button.onclick = protect(async () => { await api(`/api/${provider}/${action}`, { id: request.id, label: nameInput.value.trim() }); await refresh(); notify(action === 'approve' ? `Đã duyệt. Trở lại trang xác thực của ${site.name}.` : 'Đã từ chối kết nối.'); });
       buttons.append(button);
     }
     card.append(title, description, redirect, context, nameLabel, buttons); container.append(card);
@@ -94,12 +167,55 @@ $('save-file').onclick = protect(async () => { resultText(await tool('write_file
 $('reload-preview').onclick = () => { $('preview').src = '/preview/index.html?reload=' + Date.now(); };
 $('tunnel-form').onsubmit = protect(async () => { await api('/api/tunnel/start', { id: $('connection-id').value || undefined, label: $('connection-label').value.trim(), tunnelId: $('tunnel-id').value.trim(), apiKey: $('api-key').value.trim() }); resetTunnelForm(); await refresh(); notify('Đã khởi động kết nối. Đang chờ OpenAI.'); });
 $('cancel-reconnect').onclick = resetTunnelForm;
-$('gemini-form').onsubmit = protect(async () => { await api('/api/gemini/enable', { publicOrigin: $('gemini-origin').value.trim() }); await refresh(); notify('Cổng MCP đã bật. Thêm URL MCP vào Gemini để bắt đầu xác thực.'); });
+function geminiOriginValue() {
+  const value = $('gemini-origin').value.trim();
+  let url;
+  try { url = new URL(value); } catch { throw new Error('URL HTTPS chưa hợp lệ. Hãy copy nguyên URL https://… từ terminal tunnel.'); }
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !['/', '/mcp', '/mcp/'].includes(url.pathname)) throw new Error('Nhập URL HTTPS gốc, ví dụ https://abc.trycloudflare.com, không thêm đường dẫn khác.');
+  return { origin: url.origin, wasMcp: url.pathname.startsWith('/mcp') };
+}
+function updateGeminiOriginHint() {
+  const hint = $('gemini-origin-feedback');
+  const value = $('gemini-origin').value.trim();
+  hint.classList.toggle('is-error', /\/mcp\/?(?:[?#]|$)/i.test(value));
+  hint.textContent = /\/mcp\/?(?:[?#]|$)/i.test(value) ? 'Bạn đang dán URL MCP. Code Bridge sẽ tự lấy URL gốc để bật cổng; URL có /mcp dùng trong Gemini.' : 'URL gốc chỉ dùng trong Code Bridge; ứng dụng sẽ tạo URL MCP hoàn chỉnh cho Gemini.';
+}
+$('gemini-origin').oninput = updateGeminiOriginHint;
+$('gemini-form').onsubmit = protect(async () => {
+  const { origin, wasMcp } = geminiOriginValue();
+  $('gemini-origin').value = origin;
+  updateGeminiOriginHint();
+  const alreadyEnabled = state.gemini?.enabled && state.gemini.publicOrigin === origin;
+  if (alreadyEnabled) { notify('Cổng đã bật với URL này; các quyền Gemini vẫn được giữ nguyên.'); return; }
+  await api('/api/gemini/enable', { publicOrigin: origin });
+  await refresh();
+  notify(wasMcp ? 'Đã lấy URL gốc để bật cổng. Trong Gemini, hãy dùng nút Copy URL MCP có đuôi /mcp.' : 'Cổng đã bật. Bấm Copy URL MCP ở bên phải, rồi dán vào Gemini.');
+});
 $('disable-gemini').onclick = protect(async () => { await api('/api/gemini/disable', {}); await refresh(); notify('Đã tắt cổng Gemini và thu hồi quyền truy cập.'); });
 $('revoke-gemini').onclick = protect(async () => { await api('/api/gemini/revoke', {}); await refresh(); notify('Đã thu hồi toàn bộ quyền Gemini.'); });
 $('copy-gemini-command').onclick = protect(async () => { await navigator.clipboard.writeText('npm run gemini:tunnel'); notify('Đã copy lệnh tạo URL.'); });
-$('copy-gemini-endpoint').onclick = protect(async () => { await navigator.clipboard.writeText(state.gemini.endpoint); notify('Đã copy URL MCP cho Gemini.'); });
-$('copy-gemini-prompt').onclick = protect(async () => { await navigator.clipboard.writeText('Use the Code Bridge connected app to list the allowed directories and read index.html in the selected workspace. Suggest a small edit, then use edit_file with dryRun=true to show the diff before applying it.'); notify('Đã copy yêu cầu thử cho Gemini.'); });
+$('copy-gemini-endpoint').onclick = protect(async () => { await navigator.clipboard.writeText(state.gemini.endpoint); notify('Đã copy URL có /mcp. Dán URL này vào “URL của máy chủ MCP” trong Gemini.'); });
+$('jump-gemini-approval').onclick = () => $('approval-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+$('copy-gemini-prompt').onclick = protect(async () => { await navigator.clipboard.writeText('Hãy dùng Code Bridge để liệt kê các thư mục được phép và đọc index.html trong dự án. Chưa sửa file.'); notify('Đã copy câu thử đọc file cho Gemini.'); });
+$('remote-origin').oninput = () => { if (remoteSites[selectedProvider]) remoteOriginDrafts[selectedProvider] = $('remote-origin').value; const hasMcp = /\/mcp\/?(?:[?#]|$)/i.test($('remote-origin').value); $('remote-origin-feedback').classList.toggle('is-error', hasMcp); $('remote-origin-feedback').textContent = hasMcp ? 'Code Bridge sẽ lấy URL gốc; khi thêm connector hãy dùng URL MCP có /mcp ở bên phải.' : 'URL gốc chỉ dùng trong Code Bridge; ứng dụng sẽ tạo URL MCP hoàn chỉnh.'; };
+$('remote-form').onsubmit = protect(async () => {
+  const provider = selectedProvider, site = remoteSites[provider];
+  if (!site) return;
+  let url;
+  try { url = new URL($('remote-origin').value.trim()); } catch { throw new Error('Hãy copy nguyên URL HTTPS từ terminal tunnel.'); }
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !['/', '/mcp', '/mcp/'].includes(url.pathname)) throw new Error('Nhập URL HTTPS gốc hoặc URL MCP có đuôi /mcp.');
+  const origin = url.origin;
+  $('remote-origin').value = origin; remoteOriginDrafts[provider] = origin;
+  if (state[provider]?.enabled && state[provider].publicOrigin === origin) { notify(`Cổng ${site.name} đang bật với URL này; quyền đã cấp vẫn còn.`); return; }
+  await api(`/api/${provider}/enable`, { publicOrigin: origin });
+  await refresh(); notify(`Cổng ${site.name} đã bật. Copy URL MCP có đuôi /mcp và dán vào connector.`);
+});
+$('disable-remote').onclick = protect(async () => { const provider = selectedProvider; await api(`/api/${provider}/disable`, {}); await refresh(); notify(`Đã tắt cổng ${remoteSites[provider].name} và thu hồi quyền.`); });
+$('revoke-remote').onclick = protect(async () => { const provider = selectedProvider; await api(`/api/${provider}/revoke`, {}); await refresh(); notify(`Đã thu hồi toàn bộ quyền ${remoteSites[provider].name}.`); });
+$('copy-remote-command').onclick = protect(async () => { await navigator.clipboard.writeText(remoteSites[selectedProvider].command); notify('Đã copy lệnh tạo URL.'); });
+$('copy-remote-endpoint').onclick = protect(async () => { await navigator.clipboard.writeText(state[selectedProvider].endpoint); notify('Đã copy URL MCP có /mcp.'); });
+$('jump-remote-approval').onclick = () => $('remote-approval-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+$('copy-remote-prompt').onclick = protect(async () => { await navigator.clipboard.writeText('Hãy dùng Code Bridge để liệt kê các thư mục được phép và đọc index.html trong dự án. Chưa sửa file.'); notify('Đã copy câu thử đọc file.'); });
 $('copy-prompt').onclick = protect(async () => { await navigator.clipboard.writeText('Hãy dùng Code Bridge để liệt kê thư mục được phép, đọc index.html trong workspace, rồi đề xuất một thay đổi nhỏ. Dùng edit_file với dryRun=true để xem diff trước khi áp dụng.'); notify('Đã copy yêu cầu thử.'); });
 $('tool-name').onchange = () => {
   const name = $('tool-name').value;
@@ -108,14 +224,14 @@ $('tool-name').onchange = () => {
 };
 $('tool-form').onsubmit = protect(async () => { const result = await tool($('tool-name').value, JSON.parse($('tool-args').value)); $('tool-result').textContent = resultText(result); await refresh(); });
 let hubBusy = false, connectionKey = '', selectedProvider = 'chatgpt', selectedTab = 'connect';
-const providerTabs = { chatgpt: 'connect', gemini: 'connect' };
-const providerQueries = { chatgpt: '', gemini: '' };
-const providerName = mode => mode === 'gemini' ? 'Gemini' : 'ChatGPT';
-const stateName = value => ({ ready: 'Tunnel sẵn sàng', authorized: 'Đã cấp quyền', stopped: 'Đã dừng', starting: 'Đang khởi động', connecting: 'Đang kết nối', stopping: 'Đang dừng', error: 'Lỗi kết nối', unknown: 'Chưa xác định' }[value] || value);
+const providerTabs = { chatgpt: 'connect', gemini: 'connect', claude: 'connect', grok: 'connect', meta: 'connect' };
+const providerQueries = { chatgpt: '', gemini: '', claude: '', grok: '', meta: '' };
+const providerName = mode => ({ chatgpt: 'ChatGPT', gemini: 'Gemini', claude: 'Claude', grok: 'Grok', meta: 'Meta AI' }[mode] || mode);
+const stateName = value => ({ ready: 'Tunnel sẵn sàng', authorized: 'Đã cấp quyền', stopped: 'Đã dừng', offline: 'Phiên cũ đã tắt', starting: 'Đang khởi động', connecting: 'Đang kết nối', stopping: 'Đang dừng', error: 'Lỗi kết nối', unknown: 'Chưa xác định' }[value] || value);
 function node(tag, text, className) { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; }
 function route() {
   const requested = location.hash.slice(1);
-  const provider = ['chatgpt', 'gemini'].includes(requested) ? requested : requested === 'connection' ? 'chatgpt' : null;
+  const provider = ['chatgpt', 'gemini', 'claude', 'grok', 'meta'].includes(requested) ? requested : requested === 'connection' ? 'chatgpt' : null;
   const view = provider ? 'provider' : ['workspace', 'tools', 'activity'].includes(requested) ? requested : 'overview';
   if (provider) {
     if (selectedProvider !== provider) {
@@ -123,6 +239,7 @@ function route() {
       $('connection-search').value = providerQueries[provider];
     }
     selectedProvider = provider; selectedTab = providerTabs[provider];
+    if (state && remoteSites[provider]) renderOtherRemote();
   }
   for (const el of document.querySelectorAll('.view')) el.hidden = el.id !== view;
   for (const link of document.querySelectorAll('nav [data-view]')) { if (link.dataset.view === (provider || view)) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current'); }
@@ -137,55 +254,61 @@ function renderTab() {
   for (const el of document.querySelectorAll('.provider-tabpanel')) el.hidden = el.id !== selectedTab + '-panel';
   for (const button of document.querySelectorAll('[data-tab]')) { const active = button.dataset.tab === selectedTab; button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; }
   $('approval-panel').hidden = selectedProvider !== 'gemini' || selectedTab === 'use';
+  $('remote-approval-panel').hidden = !remoteSites[selectedProvider] || selectedTab === 'use';
 }
 function openTab(tab) { selectedTab = tab; providerTabs[selectedProvider] = tab; renderTab(); }
 function resetTunnelForm() { $('tunnel-form').reset(); $('connection-id').value = ''; $('cancel-reconnect').hidden = true; }
-function showSetup() { location.hash = selectedProvider; route(); openTab('connect'); const el = $(selectedProvider === 'gemini' ? 'gemini-setup' : 'chatgpt-setup'); el.scrollIntoView({ block: 'start' }); (selectedProvider === 'gemini' ? $('gemini-origin') : $('connection-label')).focus({ preventScroll: true }); }
+function showSetup() { location.hash = selectedProvider; route(); openTab('connect'); const remote = remoteSites[selectedProvider]; const el = $(selectedProvider === 'gemini' ? 'gemini-setup' : remote ? 'remote-setup' : selectedProvider === 'meta' ? 'meta-setup' : 'chatgpt-setup'); el.scrollIntoView({ block: 'start' }); if (selectedProvider !== 'meta') $(selectedProvider === 'gemini' ? 'gemini-origin' : remote ? 'remote-origin' : 'connection-label').focus({ preventScroll: true }); }
 function renderHub() {
-  const supported = Array.isArray(state.connections), activeMode = state.connectionMode || 'chatgpt', name = providerName(selectedProvider), active = activeMode === selectedProvider;
+  const supported = Array.isArray(state.connections), name = providerName(selectedProvider);
   const connections = state.connections || [];
   $('upgrade-notice').hidden = supported;
-  for (const provider of ['chatgpt', 'gemini']) {
+  $('backend-upgrade-notice').hidden = !!(state.claude && state.grok);
+  for (const provider of ['chatgpt', 'gemini', 'claude', 'grok']) {
     const ready = connections.filter(c => c.provider === provider && ['ready', 'authorized'].includes(c.state)).length;
     $(provider + '-home-count').textContent = ready;
     $(provider + '-nav-count').textContent = ready;
-    $(provider + '-home-status').textContent = activeMode === provider ? 'Chế độ đang chọn' : 'Sẵn sàng thiết lập';
-    $(provider + '-home-status').classList.toggle('is-active', activeMode === provider);
+    const online = provider === 'chatgpt' ? ready > 0 : !!state[provider]?.enabled;
+    $(provider + '-home-status').textContent = provider !== 'chatgpt' && !state[provider] ? 'Cần khởi động lại' : online ? (provider === 'chatgpt' ? 'Tunnel sẵn sàng' : 'Cổng MCP đang bật') : 'Chưa kết nối';
+    $(provider + '-home-status').classList.toggle('is-active', online);
   }
-  $('home-active-mode').textContent = providerName(activeMode);
-  $('chatgpt-setup').hidden = selectedProvider !== 'chatgpt'; $('gemini-setup').hidden = selectedProvider !== 'gemini';
+  $('home-active-mode').textContent = `${connections.filter(c => c.provider === 'chatgpt' && c.state === 'ready').length} ChatGPT · ${state.gemini?.grantedCount || 0} Gemini · ${state.claude?.grantedCount || 0} Claude · ${state.grok?.grantedCount || 0} Grok`;
+  $('chatgpt-setup').hidden = selectedProvider !== 'chatgpt'; $('gemini-setup').hidden = selectedProvider !== 'gemini'; $('remote-setup').hidden = !remoteSites[selectedProvider]; $('meta-setup').hidden = selectedProvider !== 'meta'; $('setup-next').hidden = selectedProvider === 'meta';
+  $('tab-manage').hidden = selectedProvider === 'meta'; $('tab-use').hidden = selectedProvider === 'meta';
   $('provider-title').textContent = name;
-  $('provider-icon').textContent = selectedProvider === 'gemini' ? '✦' : 'C';
-  $('provider-description').textContent = selectedProvider === 'gemini' ? 'Thiết lập Custom app, duyệt quyền và quản lý các kết nối Gemini.' : 'Kết nối qua OpenAI Tunnel và quản lý các kết nối ChatGPT của bạn.';
-  $('activation-title').textContent = active ? `${name} là chế độ đang chọn` : `Bật chế độ ${name} để bắt đầu kết nối`;
-  $('activation-description').textContent = active ? 'Bạn có thể thêm và quản lý nhiều kết nối trong không gian này.' : `Hiện đang dùng ${providerName(activeMode)}. Bật ${name} sẽ dừng các kết nối ${providerName(activeMode)} đang được quản lý.`;
-  $('activate-provider').hidden = active;
-  $('activate-provider').disabled = !supported || hubBusy;
-  $('activate-provider').textContent = `Bật chế độ ${name}`;
-  $('activation-panel').classList.toggle('is-active', active);
+  $('provider-icon').textContent = ({ chatgpt: 'C', gemini: '✦', claude: '✳', grok: '𝕏', meta: '◉' })[selectedProvider];
+  $('provider-description').textContent = selectedProvider === 'meta' ? 'Theo dõi khả năng tích hợp Meta AI Connectors.' : selectedProvider === 'chatgpt' ? 'Kết nối qua OpenAI Tunnel và quản lý các kết nối ChatGPT của bạn.' : `Thiết lập remote MCP, duyệt quyền và quản lý các kết nối ${name}.`;
+  const ownConnections = connections.filter(p => p.provider === selectedProvider);
+  const ownReady = ownConnections.filter(p => ['ready', 'authorized'].includes(p.state)).length;
+  $('activation-title').textContent = selectedProvider === 'meta' ? 'Meta AI Connectors đang ở developer preview' : selectedProvider === 'chatgpt' ? `${ownReady} tunnel sẵn sàng / ${ownConnections.filter(p => !p.legacy).length} cấu hình` : `${state[selectedProvider]?.enabled ? 'Cổng MCP đang bật' : 'Cổng MCP chưa bật'} · ${ownReady} quyền còn hiệu lực`;
+  $('activation-description').textContent = selectedProvider === 'meta' ? 'Chưa có luồng tự thêm MCP URL trên meta.ai; xem điều kiện của Meta bên dưới.' : selectedProvider === 'chatgpt' ? 'Thêm tối đa 12 Tunnel ID riêng. Mỗi tunnel được kiểm tra trạng thái độc lập.' : 'Mỗi yêu cầu OAuth được duyệt riêng. Các cổng khác vẫn hoạt động khi bật cổng này.';
+  $('activate-provider').hidden = selectedProvider === 'meta';
+  $('activate-provider').disabled = !supported || hubBusy || (selectedProvider !== 'chatgpt' && selectedProvider !== 'meta' && !state[selectedProvider]);
+  $('activate-provider').textContent = selectedProvider === 'chatgpt' ? 'Thêm kết nối ChatGPT' : `Thiết lập ${name}`;
+  $('activation-panel').classList.toggle('is-active', ownReady > 0 || !!state[selectedProvider]?.enabled);
   $('add-connection').disabled = !supported;
-  for (const form of [$('tunnel-form'), $('gemini-form')]) for (const button of form.querySelectorAll('button')) button.disabled = !supported || !active || hubBusy;
+  for (const form of [$('tunnel-form'), $('gemini-form'), $('remote-form')]) for (const button of form.querySelectorAll('button')) button.disabled = !supported || hubBusy;
   $('open-provider').textContent = `Mở ${name} ↗`;
-  $('open-provider').href = selectedProvider === 'gemini' ? 'https://gemini.google.com' : 'https://chatgpt.com';
-  const own = connections.filter(p => p.provider === selectedProvider);
+  $('open-provider').href = selectedProvider === 'gemini' ? 'https://gemini.google.com' : remoteSites[selectedProvider]?.url || (selectedProvider === 'meta' ? 'https://meta.ai' : 'https://chatgpt.com');
+  const own = ownConnections;
   $('ready-count').textContent = own.filter(p => ['ready', 'authorized'].includes(p.state)).length;
   $('recent-count').textContent = own.filter(p => p.lastCallAt && Date.now() - Date.parse(p.lastCallAt) < 300000 && ['ready', 'authorized'].includes(p.state)).length;
-  $('pending-count').textContent = selectedProvider === 'gemini' ? state.gemini?.pending.length || 0 : 0;
+  $('pending-count').textContent = state[selectedProvider]?.pending?.length || 0;
   $('sidebar-project').textContent = state.workspace.split(/[\\/]/).filter(Boolean).at(-1);
   $('sidebar-permission').textContent = state.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file';
   $('setup-project').textContent = state.workspace;
   $('connections-count').textContent = own.length;
   $('use-intro').textContent = `Sau khi kết nối, bạn ra lệnh trong ${name} và quản lý file tại Code Bridge.`;
-  $('use-select').textContent = selectedProvider === 'gemini' ? 'Trong Gemini, nhập @ và chọn custom app Code Bridge bạn đã thêm.' : 'Trong ChatGPT, chọn custom app Code Bridge đã thiết lập bằng Tunnel ID của bạn.';
-  $('use-prompt').textContent = selectedProvider === 'gemini' ? 'Use Code Bridge to list the allowed directories and read index.html in the selected workspace. Suggest a small change and show the diff with edit_file dryRun=true before applying it.' : 'Hãy dùng Code Bridge để liệt kê thư mục được phép và đọc index.html trong dự án. Đề xuất một thay đổi nhỏ rồi dùng edit_file với dryRun=true để xem diff trước khi áp dụng.';
-  $('provider-troubleshooting').textContent = selectedProvider === 'gemini' ? 'Nếu không có Custom apps, hãy kiểm tra điều kiện tài khoản Google ở phần kết nối. Nếu URL báo 502, giữ terminal tunnel mở và bật cổng Gemini. Nếu trang xác thực chờ, quay về Quản lý kết nối để duyệt yêu cầu cùng mã.' : 'Nếu tunnel chưa sẵn sàng, kiểm tra Tunnel ID, Runtime API Key và thông báo trong Quản lý kết nối. Nếu không thấy tunnel trong ChatGPT, kiểm tra quyền của tài khoản và liên kết với workspace OpenAI.';
+  $('use-select').textContent = selectedProvider === 'chatgpt' ? 'Trong ChatGPT, chọn custom app Code Bridge đã thiết lập bằng Tunnel ID của bạn.' : selectedProvider === 'gemini' ? 'Trong Gemini, nhập @ và chọn custom app Code Bridge bạn đã thêm.' : `Trong ${name}, bật connector Code Bridge trong cuộc trò chuyện.`;
+  $('use-prompt').textContent = selectedProvider === 'chatgpt' ? 'Hãy dùng Code Bridge để liệt kê thư mục được phép và đọc index.html trong dự án. Đề xuất một thay đổi nhỏ rồi dùng edit_file với dryRun=true để xem diff trước khi áp dụng.' : 'Hãy dùng Code Bridge để liệt kê các thư mục được phép và đọc index.html trong dự án. Chưa sửa file.';
+  $('provider-troubleshooting').textContent = selectedProvider === 'chatgpt' ? 'Nếu tunnel chưa sẵn sàng, kiểm tra Tunnel ID, Runtime API Key và thông báo trong Quản lý kết nối.' : 'Nếu URL không hợp lệ, hãy dán URL có đuôi /mcp. Nếu báo 502, giữ terminal tunnel mở và bật cổng. Nếu xác thực chờ, quay lại Code Bridge để duyệt yêu cầu cùng mã.';
   renderConnections();
 }
 function renderConnections() {
   if (!state) return;
   const filter = selectedProvider, query = $('connection-search').value.trim().toLocaleLowerCase();
   const all = (state.connections || []).filter(p => (filter === 'all' || p.provider === filter) && (p.label + ' ' + (p.tunnelId || '')).toLocaleLowerCase().includes(query));
-  const key = JSON.stringify([all, state.connectionMode, filter, query]);
+  const key = JSON.stringify([all, filter, query]);
   if (key === connectionKey) return; connectionKey = key;
   const container = $('connection-list'); container.replaceChildren();
   if (!all.length) {
@@ -199,22 +322,23 @@ function renderConnections() {
     text.append(node('strong', item.label), node('small', providerName(item.provider) + (item.legacy ? ' · Phiên trước nâng cấp' : '')));
     const project = node('small', item.workspace); project.title = item.workspace; text.append(project);
     if (item.tunnelId) text.append(node('small', item.tunnelId));
-    if (item.provider === 'gemini') text.append(node('small', item.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file'));
-    identity.append(node('span', item.provider === 'gemini' ? '✦' : 'C', 'provider-logo ' + item.provider), text);
+    if (item.provider !== 'chatgpt') text.append(node('small', item.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file'));
+    identity.append(node('span', ({ chatgpt: 'C', gemini: '✦', claude: '✳', grok: '𝕏' })[item.provider] || '·', 'provider-logo ' + item.provider), text);
     const status = node('div'); status.append(node('span', stateName(item.state), 'badge ' + item.state));
     if (item.error) status.append(node('p', item.error, 'connection-error'));
-    const time = node('div', item.lastCallAt ? new Date(item.lastCallAt).toLocaleString('vi-VN') : item.legacy ? 'Phiên cũ không cung cấp' : 'Chưa nhận yêu cầu MCP', 'connection-time');
+    const time = node('div', undefined, 'connection-time');
+    time.append(node('div', item.lastCallAt ? `Lệnh MCP: ${new Date(item.lastCallAt).toLocaleString('vi-VN')}` : 'Chưa nhận yêu cầu MCP'));
+    if (item.provider === 'chatgpt') time.append(node('div', item.lastCheckedAt ? `Kiểm tra tunnel: ${new Date(item.lastCheckedAt).toLocaleString('vi-VN')}` : 'Chưa kiểm tra tunnel'));
     if (item.expiresAt) time.append(node('div', 'Hết hạn ' + new Date(item.expiresAt * 1000).toLocaleTimeString('vi-VN')));
     const actions = node('div', undefined, 'connection-actions');
     function action(label, fn, danger = false) { const b = node('button', label, danger ? 'danger small' : 'secondary small'); b.onclick = protect(async () => { await fn(); await refresh(); }); actions.append(b); }
-    if (item.provider === 'gemini') {
-      action('Đổi tên', async () => { $('rename-id').value = item.id; $('rename-label').value = item.label; $('rename-dialog').showModal(); });
-      action('Thu hồi', () => api('/api/gemini/revoke', { id: item.id }), true);
+    if (item.provider !== 'chatgpt') {
+      action('Đổi tên', async () => { $('rename-provider').value = item.provider; $('rename-id').value = item.id; $('rename-label').value = item.label; $('rename-dialog').showModal(); });
+      action('Thu hồi', () => api(`/api/${item.provider}/revoke`, { id: item.id }), true);
     } else {
-      if (!['stopped', 'error'].includes(item.state)) action('Dừng', () => api('/api/tunnel/stop', { id: item.id }), true);
+      if (!['stopped', 'error', 'offline'].includes(item.state)) action('Dừng', () => api('/api/tunnel/stop', { id: item.id }), true);
       else {
         action('Kết nối lại', async () => {
-          if (state.connectionMode !== 'chatgpt') { notify('Chuyển sang chế độ ChatGPT trước.'); return; }
           resetTunnelForm(); $('connection-id').value = item.legacy ? '' : item.id; $('connection-label').value = item.label; $('tunnel-id').value = item.tunnelId; $('cancel-reconnect').hidden = false; showSetup(); $('api-key').focus();
         });
         if (!item.legacy) action('Xóa', () => api('/api/tunnel/remove', { id: item.id }));
@@ -223,12 +347,7 @@ function renderConnections() {
     row.append(identity, status, time, actions); container.append(row);
   }
 }
-$('activate-provider').onclick = protect(async () => {
-  if (selectedProvider === state.connectionMode || hubBusy) return;
-  hubBusy = true;
-  try { await api('/api/mode', { mode: selectedProvider }); await refresh(); notify(`Đã bật chế độ ${providerName(state.connectionMode)}. Kết nối của chế độ cũ đã dừng.`); }
-  finally { hubBusy = false; renderHub(); }
-});
+$('activate-provider').onclick = showSetup;
 for (const button of document.querySelectorAll('[data-tab]')) {
   button.onclick = () => openTab(button.dataset.tab);
   button.onkeydown = event => {
@@ -244,9 +363,10 @@ for (const button of document.querySelectorAll('[data-tab]')) {
 for (const button of document.querySelectorAll('[data-open-tab]')) button.onclick = () => { openTab(button.dataset.openTab); $('tab-' + selectedTab).focus(); };
 $('copy-use-prompt').onclick = protect(async () => { await navigator.clipboard.writeText($('use-prompt').textContent); notify('Đã copy yêu cầu thử.'); });
 $('add-connection').onclick = () => { resetTunnelForm(); showSetup(); };
+$('check-connections').onclick = protect(async () => { await api('/api/connections/check', {}); await refresh(); notify('Đã kiểm tra lại trạng thái từng kết nối.'); });
 $('connection-search').oninput = renderConnections;
 $('refresh-status').onclick = protect(refresh);
-$('rename-form').onsubmit = protect(async () => { await api('/api/gemini/rename', { id: $('rename-id').value, label: $('rename-label').value }); $('rename-dialog').close(); await refresh(); });
+$('rename-form').onsubmit = protect(async () => { await api(`/api/${$('rename-provider').value}/rename`, { id: $('rename-id').value, label: $('rename-label').value }); $('rename-dialog').close(); await refresh(); });
 $('cancel-rename').onclick = () => $('rename-dialog').close();
 route();
 try { await refresh(); await files(); } catch (e) { notify(e.message, true); }

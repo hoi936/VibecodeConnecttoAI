@@ -14,8 +14,24 @@ test('previous bridge can be monitored and explicitly stopped without transferri
   t.after(() => { server.closeAllConnections(); server.close(); });
   const bridge = createLegacyBridge(`http://127.0.0.1:${server.address().port}`, 'http://127.0.0.1:3213');
   await bridge.poll(); assert.equal(stops, 0); assert.equal(bridge.list()[0].state, 'ready');
+  assert.ok(bridge.list()[0].lastCheckedAt);
   assert.equal(bridge.list()[0].workspace, '/old-project');
   assert.ok(!JSON.stringify(bridge.list()).includes('csrf'));
   await bridge.stop(); assert.equal(stops, 1); assert.equal(bridge.list()[0].state, 'stopped');
   for (const url of ['https://example.com', 'http://127.0.0.1:3213', 'http://user:pass@127.0.0.1:3210']) assert.throws(() => createLegacyBridge(url, 'http://127.0.0.1:3213'));
+});
+
+test('old bridge that has stopped is reported offline so its Tunnel ID can be reused', async () => {
+  const server = createServer((req, res) => {
+    if (req.url === '/api/status') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ tunnelId: 'tunnel_old', workspace: '/old-project', tunnel: { state: 'ready', error: '' } })); }
+    else { res.statusCode = 404; res.end(); }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const bridge = createLegacyBridge(`http://127.0.0.1:${server.address().port}`, 'http://127.0.0.1:3213');
+  try {
+    await bridge.poll(); assert.equal(bridge.list()[0].state, 'ready');
+  } finally { await new Promise(resolve => server.close(resolve)); }
+  await bridge.poll();
+  assert.equal(bridge.list()[0].state, 'offline');
+  assert.match(bridge.list()[0].error, /không chạy/);
 });

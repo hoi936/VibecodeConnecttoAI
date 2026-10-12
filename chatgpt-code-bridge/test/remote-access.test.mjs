@@ -54,6 +54,9 @@ test('remote OAuth requires local consent and enforces grant boundaries', async 
   });
   await t.test('DCR and pending authorization reveal no credentials', async () => {
     assert.equal((await http('/register', { redirect_uris: ['http://evil.example/cb'] })).status, 400);
+    // Gemini Spark currently registers several Google relay callbacks at once.
+    const relayUris = Array.from({ length: 6 }, (_, index) => `https://oauth-redirect${index || ''}.googleusercontent.com/r/code-bridge`);
+    assert.equal((await http('/register', { redirect_uris: relayUris, token_endpoint_auth_method: 'none' })).status, 201);
     const response = await http('/register', { redirect_uris: [redirectUri], client_name: '<script>example</script>', token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], scope: 'mcp' });
     assert.equal(response.status, 201); registration = response.json();
     const initial = await begin(); assert.equal(initial.status, 302);
@@ -78,6 +81,8 @@ test('remote OAuth requires local consent and enforces grant boundaries', async 
     const valid = await exchange(code); assert.equal(valid.status, 200); token = valid.json();
     assert.equal((await exchange(code)).status, 400);
     const result = await http('/mcp', {}, { Authorization: 'Bearer ' + token.access_token }); assert.equal(result.status, 200); assert.equal(result.json().workspace, context.workspace);
+    assert.equal((await gateway.enable(issuer)).grantedCount, 1);
+    assert.equal((await http('/mcp', {}, { Authorization: 'Bearer ' + token.access_token })).status, 200);
     assert.ok(gateway.status().lastCallAt);
     assert.ok(!JSON.stringify(gateway.status()).includes(token.access_token));
   });

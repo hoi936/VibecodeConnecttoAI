@@ -18,8 +18,12 @@ export function createLegacyBridge(value, selfOrigin) {
     try {
       const data = await read();
       if (!data.tunnelId) { entry = null; return; }
-      entry = { id: 'legacy-chatgpt', provider: 'chatgpt', label: 'ChatGPT đang chạy trước nâng cấp', tunnelId: data.tunnelId, state: data.tunnel.state, error: data.tunnel.error, workspace: data.workspace, legacy: true, lastCallAt: null, url: url.origin };
-    } catch { if (entry) entry = { ...entry, state: 'unknown', error: 'Không đọc được trạng thái phiên cũ.' }; }
+      entry = { id: 'legacy-chatgpt', provider: 'chatgpt', label: 'ChatGPT đang chạy trước nâng cấp', tunnelId: data.tunnelId, state: data.tunnel.state, error: data.tunnel.error, workspace: data.workspace, legacy: true, lastCallAt: null, lastCheckedAt: new Date().toISOString(), url: url.origin };
+    } catch (error) {
+      if (!entry) return;
+      const offline = error.cause?.code === 'ECONNREFUSED';
+      entry = { ...entry, state: offline ? 'offline' : 'unknown', error: offline ? 'Phiên cũ không chạy trên cổng 3210.' : 'Không đọc được trạng thái phiên cũ.', lastCheckedAt: new Date().toISOString() };
+    }
   }
   async function stop() {
     if (!url || !entry || entry.state === 'stopped') return;

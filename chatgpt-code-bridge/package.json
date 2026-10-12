@@ -8,6 +8,8 @@
     "setup": "node scripts/setup.mjs",
     "setup:tunnel": "node scripts/setup-tunnel.mjs",
     "gemini:tunnel": "node scripts/gemini-tunnel.mjs",
+    "claude:tunnel": "node scripts/provider-tunnel.mjs claude",
+    "grok:tunnel": "node scripts/provider-tunnel.mjs grok",
     "build": "npm run build --prefix upstream/mcp-servers/src/filesystem --workspaces=false",
     "test": "node --test test/*.test.mjs"
   },

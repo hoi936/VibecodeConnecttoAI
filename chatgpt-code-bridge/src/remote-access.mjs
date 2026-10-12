@@ -20,7 +20,9 @@ export function validatePublicOrigin(value) {
 
 // This listener contains no administration routes. All user consent happens on the
 // separate, CSRF-protected local dashboard. OAuth state is intentionally ephemeral.
-export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port = 3212 }) {
+export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port = 3212, providerName = 'gemini' }) {
+  if (!['gemini', 'claude', 'grok'].includes(providerName)) throw new Error('Nhà cung cấp MCP không hợp lệ.');
+  const displayName = { gemini: 'Gemini', claude: 'Claude', grok: 'Grok' }[providerName];
   let listener, publicOrigin = '', enabled = false, lastCallAt = null;
   const clients = new Map(), pending = new Map(), codes = new Map(), tokens = new Map(), refreshTokens = new Map(), grants = new Map();
   function clean() {
@@ -29,7 +31,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
   function revokeAll() {
     for (const map of [pending, codes, tokens, refreshTokens, grants]) map.clear();
     lastCallAt = null;
-    log('gemini:revoke', true);
+    log(`${providerName}:revoke`, true);
   }
   function endpoint() { return publicOrigin + '/mcp'; }
   function checkResource(resource) { if (resource && resource.href !== endpoint()) throw new InvalidTargetError('Resource does not match this MCP server'); }
@@ -54,7 +56,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
       registerClient(client) {
         clean();
         if (clients.size >= 100) throw new TooManyRequestsError('Too many registered clients');
-        if (!client.redirect_uris?.length || client.redirect_uris.length > 5) throw new InvalidClientMetadataError('Provide 1–5 HTTPS redirect URIs');
+        if (!client.redirect_uris?.length || client.redirect_uris.length > 12) throw new InvalidClientMetadataError('Provide 1–12 HTTPS redirect URIs');
         for (const uri of client.redirect_uris) {
           const url = new URL(uri);
           if (url.protocol !== 'https:' || url.username || url.password || url.hash) throw new InvalidClientMetadataError('Redirect URIs must use HTTPS');
@@ -75,7 +77,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
       pending.set(id, { id, browserTicket, clientId: client.client_id, clientName: client.client_name || 'MCP client', params, workspace: context.workspace, allowWrites: context.allowWrites, status: 'pending', expiresAt: now() + 300 });
       // Browser ticket is deliberately absent from local status responses.
       res.redirect(302, `${publicOrigin}/connect/${id}/${browserTicket}`);
-      log('gemini:authorization-request', true);
+      log(`${providerName}:authorization-request`, true);
     },
     async challengeForAuthorizationCode(client, code) {
       clean(); const entry = codes.get(digest(code));
@@ -117,7 +119,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
   };
   function status() {
     clean();
-    const connections = [...grants.values()].filter(g => g.authorizedAt && g.workspace === getContext().workspace).map(g => ({ id: g.id, provider: 'gemini', label: g.label, clientName: g.clientName, state: 'authorized', workspace: g.workspace, allowWrites: g.allowWrites && getContext().allowWrites, startedAt: g.authorizedAt, lastCallAt: g.lastCallAt || null, expiresAt: g.expiresAt }));
+    const connections = [...grants.values()].filter(g => g.authorizedAt && g.workspace === getContext().workspace).map(g => ({ id: g.id, provider: providerName, label: g.label, clientName: g.clientName, state: 'authorized', workspace: g.workspace, allowWrites: g.allowWrites && getContext().allowWrites, startedAt: g.authorizedAt, lastCallAt: g.lastCallAt || null, expiresAt: g.expiresAt }));
     return { enabled, publicOrigin, endpoint: publicOrigin ? endpoint() : '', localTarget: `http://127.0.0.1:${port}`, lastCallAt, grantedCount: connections.length, connections,
       pending: [...pending.values()].filter(p => p.status === 'pending').map(p => ({ id: p.id, clientName: p.clientName, redirectUri: p.params.redirectUri, workspace: p.workspace, allowWrites: p.allowWrites, expiresAt: p.expiresAt })) };
   }
@@ -128,7 +130,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
     entry.allowWrites = entry.allowWrites && context.allowWrites;
     entry.label = label === undefined || label === '' ? entry.clientName : checkedLabel(label);
     entry.status = 'approved';
-    log('gemini:approve', true);
+    log(`${providerName}:approve`, true);
   }
   function deny(id) { const entry = pending.get(id); if (entry) entry.status = 'denied'; }
   function checkedLabel(label) { if (typeof label !== 'string' || !label.trim() || label.trim().length > 80) throw new Error('Tên kết nối cần từ 1 đến 80 ký tự.'); return label.trim(); }
@@ -136,7 +138,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
   function revoke(id) {
     grants.delete(id);
     for (const map of [tokens, refreshTokens, codes]) for (const [key, entry] of map) if (entry.grantId === id) map.delete(key);
-    log('gemini:revoke-one', true);
+    log(`${providerName}:revoke-one`, true);
   }
   async function disable() {
     enabled = false; revokeAll(); clients.clear();
@@ -146,6 +148,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
   }
   async function enable(value) {
     const checked = validatePublicOrigin(value);
+    if (enabled && checked === publicOrigin) return status();
     await disable(); publicOrigin = checked;
     const app = express(); app.disable('x-powered-by');
     app.use((req, res, next) => {
@@ -155,12 +158,24 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
       res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY' });
       next();
     });
+    app.use((req, res, next) => {
+      // Log only fixed OAuth route names and status codes. Never log query strings,
+      // credentials, authorization codes or browser tickets.
+      const route = req.path;
+      if (['/mcp', '/register', '/authorize', '/token', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource/mcp'].includes(route)) {
+        res.once('finish', () => log(`${providerName}:oauth-http`, res.statusCode < 400 || (route === '/mcp' && res.statusCode === 401), `${req.method} ${route} ${res.statusCode}`));
+      }
+      next();
+    });
     app.use(express.json({ limit: '1mb' }));
     app.use(express.urlencoded({ extended: false, limit: '16kb' }));
-    app.use(mcpAuthRouter({ provider, issuerUrl: new URL(publicOrigin), resourceServerUrl: new URL(endpoint()), scopesSupported: ['mcp'], resourceName: 'Code Bridge Workspace' }));
+    // The SDK's registration rate limiter rejects Cloudflare's X-Forwarded-For
+    // unless Express trusts the proxy. Registration is already bounded by the
+    // short-lived client store above, and this listener only accepts loopback.
+    app.use(mcpAuthRouter({ provider, issuerUrl: new URL(publicOrigin), resourceServerUrl: new URL(endpoint()), scopesSupported: ['mcp'], resourceName: 'Code Bridge Workspace', clientRegistrationOptions: { rateLimit: false } }));
     app.get('/connect/:id/:ticket', (req, res) => {
       clean(); const entry = pending.get(req.params.id);
-      if (!entry || entry.browserTicket !== req.params.ticket) return res.status(410).send('Yêu cầu không tồn tại hoặc đã hết hạn. Kết nối lại từ Gemini.');
+      if (!entry || entry.browserTicket !== req.params.ticket) return res.status(410).send(`Yêu cầu không tồn tại hoặc đã hết hạn. Kết nối lại từ ${displayName}.`);
       if (entry.workspace !== getContext().workspace) { pending.delete(entry.id); return res.status(410).send('Workspace đã thay đổi. Kết nối lại.'); }
       if (entry.status === 'approved' || entry.status === 'denied') {
         const redirect = new URL(entry.params.redirectUri);
@@ -178,17 +193,17 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
         return res.redirect(302, redirect.href);
       }
       res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; form-action 'none'");
-      res.type('html').send(`<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="3"><title>Duyệt kết nối Code Bridge</title><style>body{font:16px/1.8 system-ui;max-width:640px;margin:12vh auto;padding:24px;background:#f4f6f2;color:#173d30}code{overflow-wrap:anywhere}article{padding:28px;background:white;border-radius:18px}</style><article><h1>Duyệt kết nối trên máy của bạn</h1><p>Mở Code Bridge local → Gemini Web → Yêu cầu kết nối. Đối chiếu mã và địa chỉ trả về, rồi bấm Cho phép.</p><p>Mã yêu cầu: <code>${escapeHtml(entry.id.slice(0, 10))}</code></p><p>Ứng dụng tự khai báo: ${escapeHtml(entry.clientName)}</p><p>Địa chỉ trả về: <code>${escapeHtml(entry.params.redirectUri)}</code></p><p>Giữ trang này mở. Trang sẽ tự quay lại sau khi bạn duyệt.</p></article></html>`);
+      res.type('html').send(`<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="3"><title>Duyệt kết nối Code Bridge</title><style>body{font:16px/1.8 system-ui;max-width:640px;margin:12vh auto;padding:24px;background:#f4f6f2;color:#173d30}code{overflow-wrap:anywhere}article{padding:28px;background:white;border-radius:18px}</style><article><h1>Duyệt kết nối trên máy của bạn</h1><p>Mở Code Bridge local → ${displayName} Web → Yêu cầu kết nối. Đối chiếu mã và địa chỉ trả về, rồi bấm Cho phép.</p><p>Mã yêu cầu: <code>${escapeHtml(entry.id.slice(0, 10))}</code></p><p>Ứng dụng tự khai báo: ${escapeHtml(entry.clientName)}</p><p>Địa chỉ trả về: <code>${escapeHtml(entry.params.redirectUri)}</code></p><p>Giữ trang này mở. Trang sẽ tự quay lại sau khi bạn duyệt.</p></article></html>`);
     });
     const auth = requireBearerAuth({ verifier: provider, requiredScopes: ['mcp'], expectedResource: endpoint(), resourceMetadataUrl: publicOrigin + '/.well-known/oauth-protected-resource/mcp' });
-    app.post('/mcp', auth, async (req, res) => { lastCallAt = new Date().toISOString(); currentGrant(req.auth.extra.grantId).lastCallAt = lastCallAt; req.bridgeSource = 'gemini'; await handleMcp(req, res); });
+    app.post('/mcp', auth, async (req, res) => { lastCallAt = new Date().toISOString(); currentGrant(req.auth.extra.grantId).lastCallAt = lastCallAt; req.bridgeSource = providerName; await handleMcp(req, res); });
     app.all('/mcp', auth, (req, res) => res.status(405).set('Allow', 'POST').end());
     app.use((req, res) => res.sendStatus(404));
     app.use((err, req, res, next) => { if (res.headersSent) return next(err); res.status(400).json({ error: 'invalid_request' }); });
     try {
       listener = await new Promise((resolve, reject) => { const server = app.listen(port, '127.0.0.1', () => resolve(server)); server.on('error', reject); });
       enabled = true;
-      log('gemini:gateway-enabled', true, publicOrigin);
+      log(`${providerName}:gateway-enabled`, true, publicOrigin);
     } catch (e) { publicOrigin = ''; throw e; }
     return status();
   }
