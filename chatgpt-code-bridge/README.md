@@ -1,10 +1,12 @@
-# Code Bridge 0.3.2 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
+# Code Bridge 0.3.3 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
 
 Ứng dụng local cho mô hình **ChatGPT Web → OpenAI Secure MCP Tunnel → Filesystem MCP → workspace trên máy**.
 
 Hỗ trợ thêm **Gemini Web → URL HTTPS public → cổng MCP có OAuth → workspace**. Trang chủ có hai ô ChatGPT và Gemini, mỗi ô dẫn tới không gian quản lý riêng. Cả hai dịch vụ có thể hoạt động đồng thời, dùng chung workspace và công cụ của bridge.
 
 Xem [hướng dẫn ChatGPT và Gemini](docs/HUONG_DAN_CHATGPT_GEMINI.md) hoặc [hướng dẫn Claude, Grok và tình trạng Meta AI](docs/HUONG_DAN_CLAUDE_GROK_META.md). Meta AI hiện chỉ có chương trình Connectors dạng developer preview, nên bridge không hiển thị kết nối trực tiếp chưa được hỗ trợ.
+
+Bản dùng trên máy khác: [Windows portable](docs/PHAN_PHOI_WINDOWS.md) và [macOS `.app`/`.dmg`](docs/PHAN_PHOI_MACOS.md). Gói Mac có hai kiến trúc `arm64` (Apple Silicon) và `x64` (Intel).
 
 Muốn chạy trên máy Windows khác, dùng [bản Windows x64 portable](docs/PHAN_PHOI_WINDOWS.md): giải nén ZIP, mở `CodeBridge.exe`. Gói này đã kèm Node, Filesystem MCP, tunnel-client và cloudflared; máy nhận không cần cài Node hoặc Git.
 

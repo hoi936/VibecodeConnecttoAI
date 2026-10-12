@@ -1,16 +1,21 @@
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
-import { chmod, mkdir, rename, rm } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, rename, rm } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
 import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const release = '2026.10.0';
 const assets = {
   'win32-x64': ['cloudflared-windows-amd64.exe', '86aee4017b26625cee8484c113558f48effa4cd47f7aa05fcf425604e5d2b23c'],
   'linux-x64': ['cloudflared-linux-amd64', 'd33ff2d14475178d2012c2c56beba87389ac5ded27649519f198a7d3134a99db'],
-  'linux-arm64': ['cloudflared-linux-arm64', 'e6422b9d4f72d3194bc5a38676f13667c06666523217b842a877d72a80b5ac08']
+  'linux-arm64': ['cloudflared-linux-arm64', 'e6422b9d4f72d3194bc5a38676f13667c06666523217b842a877d72a80b5ac08'],
+  'darwin-x64': ['cloudflared-darwin-amd64.tgz', '0560c9ab7281ac3f746055323623ed23bc0405b6dab9400474020cba33a978da', '903845b81828c8cb3c5d13d816a2de71c06a3da5785469df8eb0e1b736d92f9f'],
+  'darwin-arm64': ['cloudflared-darwin-arm64.tgz', '72edfd3eea463aef4d5cb89e2e209cecb048cc756c2b01915de2e0ad7cb39830', 'a2f79ff7b9420aa537d74af239f376da170bbabeb529aec416002adac6a72e70']
 };
 const providers = { gemini: 3212, claude: 3214, grok: 3215 };
 const quickUrl = /https:\/\/[a-z0-9-]+\.trycloudflare\.com\b/i;
@@ -33,7 +38,7 @@ export function createQuickTunnelManager({ root, dataDir, ports = providers, ena
   function status() { return Object.fromEntries(Object.keys(ports).map(provider => [provider, publicStatus(provider)])); }
   async function ensureBinary() {
     if (!asset) throw new Error('Tự cài cloudflared chưa hỗ trợ hệ điều hành này. Dùng URL HTTPS riêng trong phần nâng cao.');
-    const [file, expected] = asset;
+    const [file, expected, archiveExpected] = asset;
     const bundled = path.join(root, 'runtime', process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');
     if (existsSync(bundled) && await hashFile(bundled) === expected) return bundled;
     const targetDir = path.join(dataDir, 'runtime');
@@ -49,6 +54,8 @@ export function createQuickTunnelManager({ root, dataDir, ports = providers, ena
       progress.total = Number(response.headers.get('content-length')) || 0;
       if (progress.total > 100 * 1024 * 1024) throw new Error('Tệp cloudflared vượt giới hạn kích thước.');
       const temp = `${target}.${process.pid}.tmp`;
+      const download = archiveExpected ? `${temp}.tgz` : temp;
+      const extracted = `${temp}.extract`;
       try {
         if (existsSync(target)) await rm(target, { force: true });
         const meter = new Transform({ transform(chunk, encoding, callback) {
@@ -56,12 +63,18 @@ export function createQuickTunnelManager({ root, dataDir, ports = providers, ena
           if (progress.downloaded > 100 * 1024 * 1024) callback(new Error('Tệp cloudflared vượt giới hạn kích thước.'));
           else callback(null, chunk);
         } });
-        await pipeline(Readable.fromWeb(response.body), meter, createWriteStream(temp, { mode: 0o700 }));
+        await pipeline(Readable.fromWeb(response.body), meter, createWriteStream(download, { mode: 0o700 }));
+        if (archiveExpected) {
+          if (await hashFile(download) !== archiveExpected) throw new Error('SHA-256 gói cloudflared không khớp bản phát hành chính thức.');
+          await mkdir(extracted);
+          await execFileAsync('tar', ['-xzf', download, '-C', extracted, 'cloudflared']);
+          await copyFile(path.join(extracted, 'cloudflared'), temp);
+        }
         if (await hashFile(temp) !== expected) throw new Error('SHA-256 cloudflared không khớp bản phát hành chính thức.');
         if (process.platform !== 'win32') await chmod(temp, 0o700);
         await rename(temp, target);
         return target;
-      } finally { await rm(temp, { force: true }); }
+      } finally { await rm(download, { force: true }); await rm(temp, { force: true }); await rm(extracted, { recursive: true, force: true }); }
     })();
     try { return await installing; } finally { installing = undefined; }
   }

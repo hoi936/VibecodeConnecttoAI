@@ -1,0 +1,48 @@
+name: Build Code Bridge macOS
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'chatgpt-code-bridge/**'
+      - '.github/workflows/build-macos.yml'
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.3'
+      - name: Build Filesystem MCP and macOS apps
+        working-directory: chatgpt-code-bridge
+        run: |
+          npm ci --no-audit --no-fund
+          npm run setup
+          npm run package:mac
+      - name: Verify disk images and checksums
+        working-directory: chatgpt-code-bridge
+        run: |
+          for file in dist/CodeBridge-*-mac-*.dmg; do
+            hdiutil verify "$file"
+            shasum -a 256 -c "$file.sha256"
+          done
+          for file in dist/CodeBridge-*-mac-*.app.zip; do
+            shasum -a 256 -c "$file.sha256"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CodeBridge-macOS-${{ github.sha }}
+          path: |
+            chatgpt-code-bridge/dist/CodeBridge-*-mac-*.dmg
+            chatgpt-code-bridge/dist/CodeBridge-*-mac-*.dmg.sha256
+            chatgpt-code-bridge/dist/CodeBridge-*-mac-*.app.zip
+            chatgpt-code-bridge/dist/CodeBridge-*-mac-*.app.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

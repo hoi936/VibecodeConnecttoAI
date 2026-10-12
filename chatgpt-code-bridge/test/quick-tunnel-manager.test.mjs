@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createQuickTunnelManager } from '../src/quick-tunnel-manager.mjs';
@@ -85,4 +86,22 @@ test('stopping during installation cannot launch the tunnel later', async t => {
   await manager.ensureBinary();
   assert.equal(launched, false);
   assert.equal(manager.status().gemini.state, 'stopped');
+});
+
+test('macOS archive is checked before its cloudflared binary is installed', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'codebridge-quick-mac-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const binary = Buffer.from('macOS cloudflared fixture');
+  await writeFile(path.join(root, 'cloudflared'), binary);
+  const archive = path.join(root, 'cloudflared.tgz');
+  execFileSync('tar', ['-czf', archive, '-C', root, 'cloudflared']);
+  const archiveBytes = await readFile(archive);
+  const hash = value => createHash('sha256').update(value).digest('hex');
+  await rm(path.join(root, 'cloudflared'));
+  const manager = createQuickTunnelManager({ root, dataDir: path.join(root, 'data'), ports: { gemini: 3232 },
+    asset: ['cloudflared-test.tgz', hash(binary), hash(archiveBytes)],
+    fetchImpl: async () => new Response(archiveBytes, { status: 200 }), enable: async () => {}, disable: async () => {} });
+  const installed = await manager.ensureBinary();
+  assert.deepEqual(await readFile(installed), binary);
+  assert.equal(await manager.ensureBinary(), installed);
 });

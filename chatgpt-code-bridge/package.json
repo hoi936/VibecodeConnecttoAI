@@ -1,6 +1,6 @@
 {
   "name": "chatgpt-code-bridge",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "setup": "node scripts/setup.mjs",
     "setup:tunnel": "node scripts/setup-tunnel.mjs",
     "package:win": "node scripts/package-windows.mjs",
+    "package:mac": "node scripts/package-macos.mjs",
     "gemini:tunnel": "node scripts/gemini-tunnel.mjs",
     "claude:tunnel": "node scripts/provider-tunnel.mjs claude",
     "grok:tunnel": "node scripts/provider-tunnel.mjs grok",
