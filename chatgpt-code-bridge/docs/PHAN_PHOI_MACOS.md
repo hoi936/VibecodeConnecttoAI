@@ -12,7 +12,7 @@ Nếu cổng 3213 đang được một phiên khác dùng, hãy dừng phiên đ
 
 ## Tạo lại gói
 
-Trên macOS hoặc WSL/Linux có Node.js 22+, npm, Go 1.25+, `curl`, `tar` và `unzip`:
+Trên macOS hoặc WSL/Linux có Node.js 26.7+ (kèm npm 11), Go 1.25+, `curl`, `tar` và `unzip`. Đây là công cụ **để build**; ứng dụng trong gói vẫn dùng Node 22 đã kèm sẵn:
 
 ```bash
 cd chatgpt-code-bridge
