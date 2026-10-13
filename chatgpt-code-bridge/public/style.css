@@ -2196,3 +2196,28 @@ footer span {
   margin-top: 4px;
 }
 
+/* Terminal hint shown when terminal is not yet enabled system-wide */
+.terminal-grant.is-disabled {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  opacity: 0.7;
+}
+
+.terminal-grant.is-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.terminal-grant-hint {
+  font-size: 10.5px;
+  color: #f59e0b;
+  line-height: 1.65;
+  margin: 4px 0 0;
+  opacity: 0.9;
+  padding-left: 2px;
+}
+
+.terminal-grant-hint strong {
+  color: var(--text-primary);
+}
+

@@ -126,9 +126,10 @@ function renderGemini() {
     const context = document.createElement('p'); context.textContent = `${request.allowWrites && state.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file'} trong ${request.workspace}. Hết hạn lúc ${new Date(request.expiresAt * 1000).toLocaleTimeString('vi-VN')}.`;
     const nameLabel = document.createElement('label'); nameLabel.textContent = 'Tên để nhận biết kết nối';
     const nameInput = document.createElement('input'); nameInput.maxLength = 80; nameInput.placeholder = 'Ví dụ: Gemini cá nhân'; nameLabel.append(nameInput);
-    const terminalLabel = document.createElement('label'); terminalLabel.className = 'terminal-grant';
+    const terminalLabel = document.createElement('label'); terminalLabel.className = 'terminal-grant' + (state.terminalEnabled ? '' : ' is-disabled');
     const terminalInput = document.createElement('input'); terminalInput.type = 'checkbox'; terminalInput.disabled = !state.terminalEnabled;
     terminalLabel.append(terminalInput, document.createTextNode(' Cho phép chạy lệnh terminal trên máy (quyền cao, mặc định tắt)'));
+    if (!state.terminalEnabled) { const hint = document.createElement('p'); hint.className = 'terminal-grant-hint'; hint.innerHTML = '⚠ Cần bật quyền terminal hệ thống trước. Vào <a href="#workspace" onclick="navigate(\'workspace\')" style="color:var(--accent-light)">Dự án &amp; file</a> → bật <strong>Terminal trên máy</strong> rồi quay lại duyệt.'; terminalLabel.append(hint); }
     const buttons = document.createElement('div'); buttons.className = 'row';
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
@@ -183,9 +184,10 @@ function renderOtherRemote() {
     const context = document.createElement('p'); context.textContent = `${request.allowWrites && state.allowWrites ? 'Đọc và sửa file' : 'Chỉ đọc file'} trong ${request.workspace}. Hết hạn lúc ${new Date(request.expiresAt * 1000).toLocaleTimeString('vi-VN')}.`;
     const nameLabel = document.createElement('label'); nameLabel.textContent = 'Tên để nhận biết kết nối';
     const nameInput = document.createElement('input'); nameInput.maxLength = 80; nameInput.placeholder = `Ví dụ: ${site.name} cá nhân`; nameLabel.append(nameInput);
-    const terminalLabel = document.createElement('label'); terminalLabel.className = 'terminal-grant';
+    const terminalLabel = document.createElement('label'); terminalLabel.className = 'terminal-grant' + (state.terminalEnabled ? '' : ' is-disabled');
     const terminalInput = document.createElement('input'); terminalInput.type = 'checkbox'; terminalInput.disabled = !state.terminalEnabled;
     terminalLabel.append(terminalInput, document.createTextNode(' Cho phép chạy lệnh terminal trên máy (quyền cao, mặc định tắt)'));
+    if (!state.terminalEnabled) { const hint = document.createElement('p'); hint.className = 'terminal-grant-hint'; hint.innerHTML = '⚠ Cần bật quyền terminal hệ thống trước. Vào <a href="#workspace" onclick="navigate(\'workspace\')" style="color:var(--accent-light)">Dự án &amp; file</a> → bật <strong>Terminal trên máy</strong> rồi quay lại duyệt.'; terminalLabel.append(hint); }
     const buttons = document.createElement('div'); buttons.className = 'row';
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
