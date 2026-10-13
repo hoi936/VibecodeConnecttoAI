@@ -130,7 +130,7 @@ with zipfile.ZipFile(sys.argv[3]) as z:
     '4. ChatGPT: can Tunnel ID va Runtime API Key cua tai khoan du dieu kien.',
     '5. Gemini/Claude/Grok: bam Tao URL va ket noi tren giao dien, cho URL MCP /mcp hien ra, roi copy vao website AI.',
     '6. Du lieu cau hinh o %LOCALAPPDATA%\\CodeBridge; khong xoa neu muon giu workspace va Tunnel ID.',
-    '7. Khi dong CodeBridge.exe, cac ket noi va quyen OAuth dang chay se mat; ket noi lai sau khi mo lai.',
+    '7. Quick Tunnel doi URL khi mo lai. Voi URL HTTPS co dinh, quyen OAuth con han duoc khoi phuc; tunnel ben ngoai can chay lai.',
     '',
     'Chi su dung file tai ve tu nguon ban tin cay. CodeBridge.exe chua duoc ky so.',
     'Huong dan day du: README.md va docs\\.',

@@ -40,7 +40,7 @@ async function connect(workspace) {
   const canonical = await realpath(workspace);
   if (!(await stat(canonical)).isDirectory() || path.dirname(canonical) === canonical) throw new Error('Chọn một thư mục dự án hợp lệ.');
   if (!existsSync(path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'))) throw new Error('Cần build Filesystem MCP trước: npm run build');
-  const next = new Client({ name: 'local-code-bridge', version: '0.3.6' });
+  const next = new Client({ name: 'local-code-bridge', version: '0.3.7' });
   const transport = new StdioClientTransport({ command: process.execPath, args: [path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'), canonical], stderr: 'pipe' });
   let startupError = '';
   transport.stderr?.on('data', chunk => { startupError = (startupError + chunk.toString()).slice(-3000); });
@@ -225,7 +225,7 @@ async function handleMcp(req, res) {
   const remoteAuth = remotes[req.bridgeSource] ? { ...req.auth.extra, provider: req.bridgeSource } : { provider: 'chatgpt', id: req.params.id, workspace: config.workspace, allowWrites: true };
   if (connectionChanging) return res.status(409).json({ error: 'Đang thay đổi kết nối.' });
   if (remoteAuth.id) tunnels.touch(remoteAuth.id);
-  const server = new Server({ name: 'Local Code Bridge', version: '0.3.6' }, { capabilities: { tools: {} }, instructions: `Work in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. If run_command is available, it runs on the local computer with the operating-system user's permissions; use it only when the task requires it.` });
+  const server = new Server({ name: 'Local Code Bridge', version: '0.3.7' }, { capabilities: { tools: {} }, instructions: `Work in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. If run_command is available, it runs on the local computer with the operating-system user's permissions; use it only when the task requires it.` });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: availableTools(remoteAuth) }));
   server.setRequestHandler(CallToolRequestSchema, async r => callTool(r.params.name, r.params.arguments, remoteAuth));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
