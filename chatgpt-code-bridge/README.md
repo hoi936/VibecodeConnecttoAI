@@ -1,4 +1,4 @@
-# Code Bridge 0.3.5 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
+# Code Bridge 0.3.6 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
 
 Ứng dụng local cho mô hình **ChatGPT Web → OpenAI Secure MCP Tunnel → Filesystem MCP → workspace trên máy**.
 

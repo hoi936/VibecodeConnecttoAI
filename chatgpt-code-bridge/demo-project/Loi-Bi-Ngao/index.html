@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Máy Đo Độ Ngáo Của Lợi</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #1f1c2c, #928dab);
+      color: #fff;
+      padding: 20px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      padding: 30px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 8px;
+      color: #ffdd59;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    p.subtitle {
+      font-size: 0.95rem;
+      color: #e0e0e0;
+      margin-bottom: 24px;
+    }
+
+    .avatar {
+      font-size: 4rem;
+      margin-bottom: 12px;
+      display: inline-block;
+      animation: wobble 2s infinite ease-in-out;
+    }
+
+    @keyframes wobble {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(-10deg) scale(1.05); }
+      75% { transform: rotate(10deg) scale(0.95); }
+    }
+
+    .meter-container {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 30px;
+      overflow: hidden;
+      height: 24px;
+      margin: 20px 0;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00d2d3, #ff9f43, #ff5252);
+      border-radius: 30px;
+      transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    .score-display {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #ff9ff3;
+      margin: 10px 0;
+    }
+
+    .diagnosis-box {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+      min-height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      line-height: 1.4;
+      font-style: italic;
+      color: #f1f2f6;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: #ff5252;
+      color: #fff;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 25px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(255, 82, 82, 0.4);
+    }
+
+    button:hover {
+      background: #ff3838;
+      transform: translateY(-2px);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button.secondary {
+      background: #54a0ff;
+      box-shadow: 0 4px 14px rgba(84, 160, 255, 0.4);
+    }
+
+    button.secondary:hover {
+      background: #2e86de;
+    }
+
+    .quote-list {
+      margin-top: 24px;
+      text-align: left;
+      font-size: 0.85rem;
+      color: #ced6e0;
+      border-top: 1px dashed rgba(255, 255, 255, 0.2);
+      padding-top: 14px;
+    }
+
+    .quote-list ul {
+      padding-left: 20px;
+      margin-top: 8px;
+    }
+
+    .quote-list li {
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="avatar" id="avatarIcon">😵‍💫</div>
+    <h1>MÁY ĐO ĐỘ NGÁO CỦA LỢI</h1>
+    <p class="subtitle">Hệ thống quét sóng não và phân tích hành vi thời gian thực</p>
+
+    <div class="score-display" id="scoreText">Chưa quét</div>
+
+    <div class="meter-container">
+      <div class="meter-fill" id="meterFill"></div>
+    </div>
+
+    <div class="diagnosis-box" id="diagnosisBox">
+      Nhấn nút "Quét Sóng Não" để xác định độ ngáo hiện tại của Lợi!
+    </div>
+
+    <div class="btn-group">
+      <button onclick="scanBrain()">🔍 Quét Sóng Não</button>
+      <button class="secondary" onclick="giveRemedy()">💊 Kê Đơn Cứu Lợi</button>
+    </div>
+
+    <div class="quote-list">
+      <strong>Khoảnh khắc huyền thoại của Lợi:</strong>
+      <ul>
+        <li>Đi tìm điện thoại khi đang cầm nó trên tay.</li>
+        <li>Hỏi bài xong quên mất mình vừa hỏi cái gì.</li>
+        <li>Bấm nút thang máy xong đứng nhìn nó đi lên mà không bước vào.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const diagnoses = [
+      { min: 0, max: 20, text: "Bình thường đột xuất! Nghi ngờ Lợi vừa mới uống cà phê xong.", icon: "🧐" },
+      { min: 21, max: 50, text: "Hơi ngơ ngác nhẹ, hỏi 1 đằng trả lời 1 nẻo nhưng vẫn cứu được.", icon: "🤔" },
+      { min: 51, max: 80, text: "Ngáo ở mức báo động! Đang vừa đi vừa quên lý do mình đi đâu.", icon: "😵" },
+      { min: 81, max: 99, text: "Ngáo xuyên không gian và thời gian. Hãy cho Lợi nghỉ ngơi ngay!", icon: "🤪" },
+      { min: 100, max: 100, text: "MAX NGÁO (100%)! Bộ xử lý của Lợi đã bốc khói 404 Not Found!", icon: "🤯" }
+    ];
+
+    const remedies = [
+      "Kê đơn: Uống ngay 1 cốc trà sữa 50% đường 50% đá để tỉnh táo.",
+      "Kê đơn: Đi ngủ ngay 15 phút, tắt thông báo điện thoại.",
+      "Kê đơn: Không giao việc gì quan trọng cho Lợi trong vòng 2 tiếng tới.",
+      "Kê đơn: Cho Lợi xem meme mèo để nạp lại năng lượng tư duy.",
+      "Kê đơn: Reset lại 'router não' của Lợi bằng 1 cốc nước mát."
+    ];
+
+    function scanBrain() {
+      const scoreDisplay = document.getElementById('scoreText');
+      const meterFill = document.getElementById('meterFill');
+      const diagnosisBox = document.getElementById('diagnosisBox');
+      const avatarIcon = document.getElementById('avatarIcon');
+
+      scoreDisplay.innerText = "Đang quét...";
+      diagnosisBox.innerText = "Đang phân tích tín hiệu từ vệ tinh...";
+      meterFill.style.width = "30%";
+
+      setTimeout(() => {
+        // Tỷ lệ cao rơi vào mức ngáo cao cho vui nhộn
+        const score = Math.floor(Math.random() * 41) + 60; // 60 - 100%
+        meterFill.style.width = score + "%";
+        scoreDisplay.innerText = "Độ ngáo: " + score + "%";
+
+        const matched = diagnoses.find(d => score >= d.min && score <= d.max) || diagnoses[diagnoses.length - 1];
+        diagnosisBox.innerText = matched.text;
+        avatarIcon.innerText = matched.icon;
+      }, 700);
+    }
+
+    function giveRemedy() {
+      const diagnosisBox = document.getElementById('diagnosisBox');
+      const randomRemedy = remedies[Math.floor(Math.random() * remedies.length)];
+      diagnosisBox.innerText = randomRemedy;
+    }
+  </script>
+</body>
+</html>

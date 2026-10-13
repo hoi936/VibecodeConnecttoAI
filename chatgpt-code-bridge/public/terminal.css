@@ -1,18 +1,95 @@
+/* Modern Cyber-Luxury Terminal & Permissions */
 .terminal-permission {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 24px;
-  margin: 18px 0;
-  padding: 20px 22px;
-  border: 1px solid #dbc7a8;
-  border-radius: 14px;
-  background: #fffaf1;
+  margin: 20px 0;
+  padding: 22px 24px;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(20, 18, 12, 0.6) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(245, 158, 11, 0.15);
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.terminal-permission strong { color: #704a1f; }
-.terminal-permission p { max-width: 850px; margin: 8px 0 0; line-height: 1.7; }
-.terminal-permission .toggle { color: #704a1f; font-weight: 700; }
-.terminal-grant { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; color: #704a1f; line-height: 1.5; }
-.terminal-grant input { flex: none; margin-top: 3px; accent-color: #8c652f; }
-@media (max-width: 720px) { .terminal-permission { flex-direction: column; } }
-.badge.paused { background: #fff3e8; color: #9a602f; }
+
+.terminal-permission:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.12), inset 0 1px 0 rgba(245, 158, 11, 0.25);
+}
+
+.terminal-permission strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fbbf24;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.terminal-permission strong::before {
+  content: '⚡';
+  font-size: 14px;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.5));
+}
+
+.terminal-permission p {
+  max-width: 850px;
+  margin: 8px 0 0;
+  color: #d1d5db;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.terminal-permission .toggle {
+  color: #fef3c7;
+  font-weight: 600;
+  font-size: 13px;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  transition: all 0.2s ease;
+}
+
+.terminal-permission .toggle:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.terminal-grant {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #fef3c7;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.terminal-grant input {
+  flex: none;
+  margin-top: 3px;
+  accent-color: #f59e0b;
+  cursor: pointer;
+}
+
+.badge.paused {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+@media (max-width: 720px) {
+  .terminal-permission {
+    flex-direction: column;
+    gap: 16px;
+  }
+}
