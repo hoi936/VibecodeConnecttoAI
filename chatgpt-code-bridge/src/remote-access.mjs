@@ -174,6 +174,9 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
     entry.label = label === undefined || label === '' ? entry.clientName : checkedLabel(label);
     entry.status = 'approved';
     log(`${providerName}:approve`, true);
+    // The provider may close or lose its authorization tab. Return a one-time
+    // resume URL only to the local approver; never expose its ticket in status.
+    return { continueUrl: `${publicOrigin}/connect/${entry.id}/${entry.browserTicket}` };
   }
   function deny(id) { const entry = pending.get(id); if (entry) entry.status = 'denied'; }
   function checkedLabel(label) { if (typeof label !== 'string' || !label.trim() || label.trim().length > 80) throw new Error('Tên kết nối cần từ 1 đến 80 ký tự.'); return label.trim(); }

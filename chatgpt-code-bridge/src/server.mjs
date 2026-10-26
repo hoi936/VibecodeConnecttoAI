@@ -194,7 +194,7 @@ for (const [name, remote] of Object.entries(remotes)) {
     config[`${name}Origin`] = result.publicOrigin; await saveConfig(); return result;
   })));
   app.post(`/api/${name}/disable`, async (req, res) => res.json(await connectionAction(async () => { await quickTunnels.stop(name); await remote.disable(); delete config[`${name}Origin`]; await saveConfig(); return { ok: true }; })));
-  app.post(`/api/${name}/approve`, (req, res) => { remote.approve(req.body.id, req.body.label, req.body.allowTerminal ?? false); res.json({ ok: true }); });
+  app.post(`/api/${name}/approve`, (req, res) => { res.json({ ok: true, ...remote.approve(req.body.id, req.body.label, req.body.allowTerminal ?? false) }); });
   app.post(`/api/${name}/deny`, (req, res) => { remote.deny(req.body.id); res.json({ ok: true }); });
   app.post(`/api/${name}/revoke`, (req, res) => { terminalRunner.stopAll(); if (req.body.id) remote.revoke(req.body.id); else remote.revokeAll(); res.json({ ok: true }); });
   app.post(`/api/${name}/rename`, (req, res) => { remote.rename(req.body.id, req.body.label); res.json({ ok: true }); });

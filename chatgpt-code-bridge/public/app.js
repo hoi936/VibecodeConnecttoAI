@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 let state, selectedFile = '', noticeTimer;
+const authorizationResume = new Map();
 $('workspace').querySelector('.section-heading').insertAdjacentHTML('afterend', '<div class="terminal-permission"><div><strong>Quyền terminal trên máy</strong><p class="muted">Mặc định tắt mỗi khi mở Code Bridge. Khi bật, lệnh chạy với quyền của tài khoản máy tính này và có thể tạo tiến trình nền. Thư mục dự án chỉ là nơi bắt đầu, không giới hạn quyền truy cập. Cấp quyền riêng cho từng kết nối ChatGPT hoặc khi duyệt Gemini/Claude/Grok.</p></div><label class="toggle"><input id="allow-terminal" type="checkbox"> Bật terminal</label></div>');
 function notify(message, error = false) { $('notice').hidden = false; $('notice').textContent = message; $('notice').className = error ? 'error' : ''; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 6000); }
 async function api(url, body) {
@@ -14,6 +15,25 @@ async function api(url, body) {
   return result;
 }
 function resultText(result) { if (result.isError) throw new Error(result.content?.map(c => c.text || '').join('\n')); return result.content?.map(c => c.text || '').join('\n') || JSON.stringify(result, null, 2); }
+function showAuthorizationResume(container, url, provider) {
+  if (!url) return;
+  if (container.querySelector('[data-authorization-resume]')) return;
+  const card = document.createElement('article'); card.className = 'approval-card';
+  card.dataset.authorizationResume = 'true';
+  const message = document.createElement('p'); message.textContent = `Đã cho phép. Nếu ${provider} báo chưa liên kết, bấm nút dưới đây để hoàn tất xác thực trong tab mới.`;
+  const link = document.createElement('a'); link.className = 'button small'; link.textContent = `Hoàn tất liên kết ${provider} ↗`;
+  link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+  card.append(message, link); container.prepend(card);
+}
+function rememberAuthorizationResume(provider, url) {
+  if (url) authorizationResume.set(provider, { url, expiresAt: Date.now() + 5 * 60_000 });
+}
+function renderAuthorizationResume(container, provider, label) {
+  const entry = authorizationResume.get(provider);
+  if (!entry) return;
+  if (entry.expiresAt <= Date.now()) { authorizationResume.delete(provider); return; }
+  showAuthorizationResume(container, entry.url, label);
+}
 function renderQuickTunnel(provider, prefix, name) {
   const quick = state.quickTunnels?.[provider];
   if (!quick) {
@@ -135,11 +155,12 @@ function renderGemini() {
     const buttons = document.createElement('div'); buttons.className = 'row';
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
-      button.onclick = protect(async () => { await api(`/api/gemini/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); await refresh(); notify(action === 'approve' ? 'Đã duyệt. Trở lại trang xác thực của Gemini.' : 'Đã từ chối kết nối.'); });
+      button.onclick = protect(async () => { const result = await api(`/api/gemini/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); if (action === 'approve') rememberAuthorizationResume('gemini', result.continueUrl); await refresh(); notify(action === 'approve' ? 'Đã duyệt. Nếu Gemini chưa liên kết, bấm Hoàn tất liên kết bên dưới.' : 'Đã từ chối kết nối.'); });
       buttons.append(button);
     }
     card.append(title, description, redirect, context, nameLabel, terminalLabel, buttons); container.append(card);
   }
+  renderAuthorizationResume(container, 'gemini', 'Gemini');
 }
 const remoteSites = {
   claude: { name: 'Claude', url: 'https://claude.ai/customize/connectors', info: 'Claude Web: Customize → Connectors → + Add → Add custom connector. Nếu dùng Team/Enterprise, quản trị viên phải thêm connector trước.', steps: ['Mở Customize → Connectors → + Add → Add custom connector; nhập tên Code Bridge và dán URL MCP có đuôi /mcp.', 'Chọn Sign in now hoặc Sign in when needed. Ở OAuth client, chọn Register automatically để dùng đăng ký OAuth của Code Bridge. Hoàn tất Add rồi bấm Connect.', 'Khi trang xin quyền mở, đối chiếu mã ở Code Bridge và bấm Cho phép. Trong cuộc chat, bật connector bằng nút + → Connectors rồi thử đọc file.'] },
@@ -193,11 +214,12 @@ function renderOtherRemote() {
     const buttons = document.createElement('div'); buttons.className = 'row';
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
-      button.onclick = protect(async () => { await api(`/api/${provider}/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); await refresh(); notify(action === 'approve' ? `Đã duyệt. Trở lại trang xác thực của ${site.name}.` : 'Đã từ chối kết nối.'); });
+      button.onclick = protect(async () => { const result = await api(`/api/${provider}/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); if (action === 'approve') rememberAuthorizationResume(provider, result.continueUrl); await refresh(); notify(action === 'approve' ? `Đã duyệt. Nếu ${site.name} chưa liên kết, bấm Hoàn tất liên kết bên dưới.` : 'Đã từ chối kết nối.'); });
       buttons.append(button);
     }
     card.append(title, description, redirect, context, nameLabel, terminalLabel, buttons); container.append(card);
   }
+  renderAuthorizationResume(container, provider, site.name);
 }
 async function files(directory = '.') {
   const text = resultText(await tool('list_directory', { path: directory }));
