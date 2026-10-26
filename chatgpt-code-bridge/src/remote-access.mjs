@@ -113,7 +113,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
       if (!/^[A-Za-z0-9_-]{43}$/.test(params.codeChallenge)) throw new InvalidGrantError('Invalid S256 challenge');
       if (pending.size >= 30) throw new TooManyRequestsError('Too many pending requests');
       const id = nonce(), browserTicket = nonce(), context = getContext();
-      pending.set(id, { id, browserTicket, clientId: client.client_id, clientName: client.client_name || 'MCP client', params, workspace: context.workspace, allowWrites: context.allowWrites, status: 'pending', expiresAt: now() + 300 });
+      pending.set(id, { id, browserTicket, clientId: client.client_id, clientName: client.client_name || 'MCP client', params, workspace: context.workspace, allowWrites: context.allowWrites, status: 'pending', expiresAt: now() + 900 });
       // Browser ticket is deliberately absent from local status responses.
       res.redirect(302, `${publicOrigin}/connect/${id}/${browserTicket}`);
       log(`${providerName}:authorization-request`, true);
@@ -161,7 +161,8 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
     clean();
     const connections = [...grants.values()].filter(g => g.authorizedAt && g.workspace === getContext().workspace).map(g => ({ id: g.id, provider: providerName, label: g.label, clientName: g.clientName, state: g.paused ? 'paused' : 'authorized', workspace: g.workspace, allowWrites: g.allowWrites && getContext().allowWrites, allowTerminal: g.allowTerminal === true && getContext().allowTerminal === true, startedAt: g.authorizedAt, lastCallAt: g.lastCallAt || null, expiresAt: g.expiresAt }));
     return { enabled, publicOrigin, endpoint: publicOrigin ? endpoint() : '', localTarget: `http://127.0.0.1:${port}`, lastCallAt, grantedCount: connections.length, connections,
-      pending: [...pending.values()].filter(p => p.status === 'pending').map(p => ({ id: p.id, clientName: p.clientName, redirectUri: p.params.redirectUri, workspace: p.workspace, allowWrites: p.allowWrites, expiresAt: p.expiresAt })) };
+      pending: [...pending.values()].filter(p => p.status === 'pending').map(p => ({ id: p.id, clientName: p.clientName, redirectUri: p.params.redirectUri, workspace: p.workspace, allowWrites: p.allowWrites, expiresAt: p.expiresAt })),
+      awaitingCompletion: [...pending.values()].filter(p => p.status === 'approved').map(p => ({ id: p.id, clientName: p.clientName, expiresAt: p.expiresAt })) };
   }
   function approve(id, label, allowTerminal = false) {
     clean(); const entry = pending.get(id), context = getContext();
@@ -179,6 +180,11 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
     return { continueUrl: `${publicOrigin}/connect/${entry.id}/${entry.browserTicket}` };
   }
   function deny(id) { const entry = pending.get(id); if (entry) entry.status = 'denied'; }
+  function continuation(id) {
+    clean(); const entry = pending.get(id);
+    if (!entry || entry.status !== 'approved' || entry.workspace !== getContext().workspace) throw new Error('Yêu cầu đã hết hạn. Hãy bắt đầu kết nối lại từ trang của nhà cung cấp.');
+    return { continueUrl: `${publicOrigin}/connect/${entry.id}/${entry.browserTicket}` };
+  }
   function checkedLabel(label) { if (typeof label !== 'string' || !label.trim() || label.trim().length > 80) throw new Error('Tên kết nối cần từ 1 đến 80 ký tự.'); return label.trim(); }
   function rename(id, label) { currentGrant(id).label = checkedLabel(label); saveState(); }
   function pause(id) { currentGrant(id).paused = true; saveState(); log(`${providerName}:pause`, true); }
@@ -246,6 +252,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
       revocationOptions: { rateLimit: false },
     }));
     app.get('/connect/:id/:ticket', (req, res) => {
+      res.once('finish', () => log(`${providerName}:oauth-http`, res.statusCode < 400, `GET /connect ${res.statusCode}`));
       clean(); const entry = pending.get(req.params.id);
       if (!entry || entry.browserTicket !== req.params.ticket) return res.status(410).send(`Yêu cầu không tồn tại hoặc đã hết hạn. Kết nối lại từ ${displayName}.`);
       if (entry.workspace !== getContext().workspace) { pending.delete(entry.id); return res.status(410).send('Workspace đã thay đổi. Kết nối lại.'); }
@@ -285,5 +292,5 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
     } catch (e) { publicOrigin = ''; throw e; }
     return status();
   }
-  return { enable, disable, status, approve, deny, revokeAll, revoke, rename, pause, resume, validateGrant: activeGrant, close };
+  return { enable, disable, status, approve, continuation, deny, revokeAll, revoke, rename, pause, resume, validateGrant: activeGrant, close };
 }

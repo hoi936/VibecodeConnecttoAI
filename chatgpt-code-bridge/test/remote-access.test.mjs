@@ -42,8 +42,12 @@ test('remote OAuth requires local consent and enforces grant boundaries', async 
     const approval = gateway.approve(pending.id, undefined, allowTerminal);
     assert.equal(approval.continueUrl, initial.headers.location);
     assert.ok(!JSON.stringify(gateway.status()).includes(approval.continueUrl));
-    const redirect = await http(approval.continueUrl);
+    assert.equal(gateway.status().awaitingCompletion.at(-1).id, pending.id);
+    assert.equal(gateway.continuation(pending.id).continueUrl, approval.continueUrl);
+    const redirect = await http(gateway.continuation(pending.id).continueUrl);
     assert.equal(redirect.status, 302);
+    assert.equal(gateway.status().awaitingCompletion.length, 0);
+    assert.throws(() => gateway.continuation(pending.id), /hết hạn/);
     const location = new URL(redirect.headers.location);
     assert.equal(location.searchParams.get('state'), 'test-state');
     return location.searchParams.get('code');

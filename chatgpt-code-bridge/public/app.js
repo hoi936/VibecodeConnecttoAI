@@ -34,6 +34,14 @@ function renderAuthorizationResume(container, provider, label) {
   if (entry.expiresAt <= Date.now()) { authorizationResume.delete(provider); return; }
   showAuthorizationResume(container, entry.url, label);
 }
+async function resumeAuthorization(provider, id) {
+  const tab = window.open('about:blank', '_blank');
+  try {
+    const result = await api(`/api/${provider}/continue`, { id });
+    if (tab) { tab.opener = null; tab.location.href = result.continueUrl; }
+    else showAuthorizationResume($(provider === 'gemini' ? 'gemini-pending' : 'remote-pending'), result.continueUrl, provider);
+  } catch (error) { tab?.close(); throw error; }
+}
 function renderQuickTunnel(provider, prefix, name) {
   const quick = state.quickTunnels?.[provider];
   if (!quick) {
@@ -135,11 +143,18 @@ function renderGemini() {
   $('copy-gemini-endpoint').disabled = !gemini.enabled;
   $('gemini-activity').textContent = gemini.lastCallAt ? `Kết nối MCP gần nhất: ${new Date(gemini.lastCallAt).toLocaleString('vi-VN')} · ${gemini.grantedCount} quyền còn hiệu lực` : `${gemini.grantedCount} quyền còn hiệu lực · Chưa có yêu cầu MCP được xác thực.`;
   const container = $('gemini-pending');
-  const pendingKey = JSON.stringify({ pending: gemini.pending, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
+  const pendingKey = JSON.stringify({ pending: gemini.pending, awaitingCompletion: gemini.awaitingCompletion, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
   if (container.dataset.requests === pendingKey) return;
   container.dataset.requests = pendingKey;
   container.replaceChildren();
-  if (!gemini.pending.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Chưa có yêu cầu. Yêu cầu sẽ xuất hiện khi Gemini bắt đầu xác thực.'; container.append(p); }
+  if (!gemini.pending.length && !gemini.awaitingCompletion?.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Chưa có yêu cầu. Yêu cầu sẽ xuất hiện khi Gemini bắt đầu xác thực.'; container.append(p); }
+  for (const request of gemini.awaitingCompletion || []) {
+    const card = document.createElement('article'); card.className = 'approval-card';
+    const message = document.createElement('p'); message.textContent = `Đã duyệt ${request.clientName}; đang chờ hoàn tất trên Gemini. Liên kết có hiệu lực đến ${new Date(request.expiresAt * 1000).toLocaleTimeString('vi-VN')}.`;
+    const button = document.createElement('button'); button.className = 'small'; button.textContent = 'Hoàn tất liên kết Gemini ↗';
+    button.onclick = protect(() => resumeAuthorization('gemini', request.id));
+    card.append(message, button); container.append(card);
+  }
   for (const request of gemini.pending) {
     const card = document.createElement('article'); card.className = 'approval-card';
     const title = document.createElement('h3'); title.textContent = `Mã yêu cầu: ${request.id.slice(0, 10)}`;
@@ -194,11 +209,18 @@ function renderOtherRemote() {
   $('copy-remote-endpoint').disabled = !remote.enabled;
   $('remote-activity').textContent = remote.lastCallAt ? `Lệnh MCP gần nhất: ${new Date(remote.lastCallAt).toLocaleString('vi-VN')} · ${remote.grantedCount} quyền còn hiệu lực.` : `${remote.grantedCount} quyền còn hiệu lực · Chưa có lệnh MCP được xác thực.`;
   const container = $('remote-pending');
-  const pendingKey = JSON.stringify({ provider, pending: remote.pending, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
+  const pendingKey = JSON.stringify({ provider, pending: remote.pending, awaitingCompletion: remote.awaitingCompletion, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
   if (container.dataset.requests === pendingKey) return;
   container.dataset.requests = pendingKey;
   container.replaceChildren();
-  if (!pendingCount) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = `Chưa có yêu cầu. Yêu cầu xuất hiện khi ${site.name} bắt đầu xác thực.`; container.append(p); }
+  if (!pendingCount && !remote.awaitingCompletion?.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = `Chưa có yêu cầu. Yêu cầu xuất hiện khi ${site.name} bắt đầu xác thực.`; container.append(p); }
+  for (const request of remote.awaitingCompletion || []) {
+    const card = document.createElement('article'); card.className = 'approval-card';
+    const message = document.createElement('p'); message.textContent = `Đã duyệt ${request.clientName}; đang chờ hoàn tất trên ${site.name}. Liên kết có hiệu lực đến ${new Date(request.expiresAt * 1000).toLocaleTimeString('vi-VN')}.`;
+    const button = document.createElement('button'); button.className = 'small'; button.textContent = `Hoàn tất liên kết ${site.name} ↗`;
+    button.onclick = protect(() => resumeAuthorization(provider, request.id));
+    card.append(message, button); container.append(card);
+  }
   for (const request of remote.pending) {
     const card = document.createElement('article'); card.className = 'approval-card';
     const title = document.createElement('h3'); title.textContent = `Mã yêu cầu: ${request.id.slice(0, 10)}`;
