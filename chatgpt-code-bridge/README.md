@@ -1,4 +1,4 @@
-# Code Bridge 0.3.7 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
+# Code Bridge 0.3.8 — Trung tâm kết nối ChatGPT / Gemini / Claude / Grok
 
 Ứng dụng local cho mô hình **ChatGPT Web → OpenAI Secure MCP Tunnel → Filesystem MCP → workspace trên máy**.
 
@@ -7,6 +7,8 @@ Hỗ trợ thêm **Gemini Web → URL HTTPS public → cổng MCP có OAuth → 
 Xem [hướng dẫn ChatGPT và Gemini](docs/HUONG_DAN_CHATGPT_GEMINI.md) hoặc [hướng dẫn Claude, Grok và tình trạng Meta AI](docs/HUONG_DAN_CLAUDE_GROK_META.md). Meta AI hiện chỉ có chương trình Connectors dạng developer preview, nên bridge không hiển thị kết nối trực tiếp chưa được hỗ trợ.
 
 Bản dùng trên máy khác: [Windows portable](docs/PHAN_PHOI_WINDOWS.md) và [macOS `.app`/`.dmg`](docs/PHAN_PHOI_MACOS.md). Gói Mac có hai kiến trúc `arm64` (Apple Silicon) và `x64` (Intel).
+
+Trong VS Code, dùng [hướng dẫn kết nối MCP cho Copilot hoặc Codex](docs/KET_NOI_VSCODE.md). Với Google Antigravity, xem [hướng dẫn kết nối MCP](docs/KET_NOI_ANTIGRAVITY.md). Code Bridge cung cấp công cụ đọc/sửa file; tài khoản và model chat do IDE quản lý.
 
 Muốn chạy trên máy Windows khác, dùng [bản Windows x64 portable](docs/PHAN_PHOI_WINDOWS.md): giải nén ZIP, mở `CodeBridge.exe`. Gói này đã kèm Node, Filesystem MCP, tunnel-client và cloudflared; máy nhận không cần cài Node hoặc Git.
 
@@ -133,7 +135,7 @@ Test tạo workspace tạm và server trên cổng 3220, thử giao thức MCP H
 
 `test/remote-access.test.mjs` kiểm tra discovery, DCR, consent, PKCE, replay, redirect/resource binding, refresh rotation, thu hồi quyền và token theo workspace. `test/integration.test.mjs` kiểm tra thêm các thao tác file thật qua cổng OAuth bằng MCP SDK client; đây là client mô phỏng giao thức, không phải Gemini đăng nhập thật.
 
-Kết quả hiện tại: **24/24 kiểm thử tự động đạt**. Bộ kiểm thử mô phỏng 12 tiến trình tunnel ChatGPT với readiness riêng, hai quyền Gemini riêng, Claude và Grok có OAuth/tokens độc lập và gọi công cụ MCP, kiểm tra trạng thái theo yêu cầu, phiên bridge cũ đã tắt và giới hạn workspace. Kết nối end-to-end bằng tài khoản Claude/Grok thật vẫn cần được thử trên website của từng dịch vụ.
+Bộ kiểm thử mô phỏng 12 tiến trình tunnel ChatGPT với readiness riêng, hai quyền Gemini riêng, Claude và Grok có OAuth/tokens độc lập và gọi công cụ MCP, kiểm tra trạng thái theo yêu cầu, phiên bridge cũ đã tắt và giới hạn workspace. Kết nối end-to-end bằng tài khoản Claude/Grok thật vẫn cần được thử trên website của từng dịch vụ.
 
 Bản 0.1 đã được kiểm tra Chromium desktop/mobile cho mở/lưu file, preview, dry-run và quyền ghi. Ảnh nằm trong `artifacts/desktop.png` và `artifacts/mobile.png`. Audit runtime lúc cài bản 0.1 không có cảnh báo; dependency development upstream có cảnh báo trong chuỗi `shx/shelljs`, chưa nâng cấp breaking change.
 

@@ -14,6 +14,8 @@ import { createLegacyBridge } from './legacy-bridge.mjs';
 import { createRemoteAccess } from './remote-access.mjs';
 import { createQuickTunnelManager } from './quick-tunnel-manager.mjs';
 import { canUseTerminal, createTerminalRunner, terminalTool } from './terminal.mjs';
+import { createVscodeProxy } from './vscode-proxy.mjs';
+import { createAntigravityProxy } from './antigravity-proxy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.BRIDGE_PORT || 3210);
@@ -40,7 +42,7 @@ async function connect(workspace) {
   const canonical = await realpath(workspace);
   if (!(await stat(canonical)).isDirectory() || path.dirname(canonical) === canonical) throw new Error('Chọn một thư mục dự án hợp lệ.');
   if (!existsSync(path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'))) throw new Error('Cần build Filesystem MCP trước: npm run build');
-  const next = new Client({ name: 'local-code-bridge', version: '0.3.7' });
+  const next = new Client({ name: 'local-code-bridge', version: '0.3.8' });
   const transport = new StdioClientTransport({ command: process.execPath, args: [path.join(root, 'upstream/mcp-servers/src/filesystem/dist/index.js'), canonical], stderr: 'pipe' });
   let startupError = '';
   transport.stderr?.on('data', chunk => { startupError = (startupError + chunk.toString()).slice(-3000); });
@@ -84,6 +86,8 @@ async function callTool(name, args = {}, remoteAuth) {
 function tunnelPath() { return path.join(root, 'runtime', process.platform === 'win32' ? 'tunnel-client-runtime.exe' : 'tunnel-client-runtime'); }
 const tunnels = createTunnelManager({ binary: tunnelPath(), origin, cwd: root, profiles: config.chatgptProfiles, log });
 const legacy = createLegacyBridge(process.env.BRIDGE_LEGACY_URL, origin);
+const vscodeProxy = createVscodeProxy({ getStatus: () => ({ workspace: config.workspace }) });
+const antigravityProxy = createAntigravityProxy({ getStatus: () => ({ workspace: config.workspace }), origin });
 await legacy.poll();
 const remotes = Object.fromEntries(Object.entries({ gemini: ['GEMINI_GATEWAY_PORT', 3212], claude: ['CLAUDE_GATEWAY_PORT', 3214], grok: ['GROK_GATEWAY_PORT', 3215] }).map(([providerName, [envName, defaultPort]]) => [providerName, createRemoteAccess({ getContext: () => ({ workspace: config.workspace, allowWrites: config.allowWrites, allowTerminal: terminalEnabled }), handleMcp, log, providerName, port: Number(process.env[envName] || defaultPort), stateFile: path.join(dataDir, `oauth-${providerName}.json`) })]));
 const quickTunnels = createQuickTunnelManager({ root, dataDir,
@@ -131,7 +135,11 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.get('/health', (req, res) => res.json({ ok: true, mcp: !!client, tunnel: connections().find(p => p.provider === 'chatgpt' && p.state === 'ready') ? 'ready' : 'stopped' }));
-app.get('/api/status', (req, res) => res.json({ ...config, connectionMode: 'both', terminalEnabled, csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp` }));
+app.get('/api/status', async (req, res) => res.json({ ...config, connectionMode: 'both', terminalEnabled, csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp`, vscodeMode: await vscodeProxy.status(origin), antigravityMode: await antigravityProxy.status() }));
+app.get('/api/vscode/status', async (req, res) => res.json(await vscodeProxy.status(origin)));
+app.post('/api/vscode/configure', async (req, res) => res.json(await vscodeProxy.configureWorkspace(origin)));
+app.get('/api/antigravity/status', async (req, res) => res.json(await antigravityProxy.status()));
+app.post('/api/antigravity/configure', async (req, res) => res.json(await antigravityProxy.configureWorkspace()));
 app.post('/api/connections/check', async (req, res) => {
   await Promise.all([tunnels.poll(), legacy.poll()]);
   res.json({ ok: true, connections: connections(), summary: connectionSummary() });
@@ -225,7 +233,7 @@ async function handleMcp(req, res) {
   const remoteAuth = remotes[req.bridgeSource] ? { ...req.auth.extra, provider: req.bridgeSource } : { provider: 'chatgpt', id: req.params.id, workspace: config.workspace, allowWrites: true };
   if (connectionChanging) return res.status(409).json({ error: 'Đang thay đổi kết nối.' });
   if (remoteAuth.id) tunnels.touch(remoteAuth.id);
-  const server = new Server({ name: 'Local Code Bridge', version: '0.3.7' }, { capabilities: { tools: {} }, instructions: `Work in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. If run_command is available, it runs on the local computer with the operating-system user's permissions; use it only when the task requires it.` });
+  const server = new Server({ name: 'Local Code Bridge', version: '0.3.8' }, { capabilities: { tools: {} }, instructions: `Work in the selected workspace. Paths may be relative to the workspace. Call list_allowed_directories first. Use edit_file dryRun before applying edits. If run_command is available, it runs on the local computer with the operating-system user's permissions; use it only when the task requires it.` });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: availableTools(remoteAuth) }));
   server.setRequestHandler(CallToolRequestSchema, async r => callTool(r.params.name, r.params.arguments, remoteAuth));
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
@@ -259,13 +267,16 @@ try {
     throw error;
   }
 }
-for (const [name, remote] of Object.entries(remotes)) {
-  const saved = config[`${name}Origin`];
-  if (typeof saved !== 'string' || !saved) continue;
-  try {
-    if (!new URL(saved).hostname.endsWith('.trycloudflare.com')) await remote.enable(saved);
-  } catch (error) { log(`${name}:restore`, false, error.message); }
+async function restoreSavedRemotes() {
+  for (const [name, remote] of Object.entries(remotes)) {
+    const saved = config[`${name}Origin`];
+    if (typeof saved !== 'string' || !saved || remote.status().enabled) continue;
+    try {
+      if (!new URL(saved).hostname.endsWith('.trycloudflare.com')) await remote.enable(saved);
+    } catch (error) { log(`${name}:restore`, false, error.message); }
+  }
 }
+await restoreSavedRemotes();
 const httpServer = app.listen(port, '127.0.0.1', () => console.log(`Code Bridge: ${origin}\nMCP: ${origin}/mcp\nWorkspace: ${config.workspace}`));
 async function shutdown() { clearInterval(healthTimer); terminalRunner.stopAll(); await tunnels.close(); await quickTunnels.close(); await Promise.all(Object.values(remotes).map(remote => remote.close())); await toolQueue; await client?.close(); httpServer.close(); }
 process.on('SIGINT', () => shutdown().then(() => process.exit(0)));

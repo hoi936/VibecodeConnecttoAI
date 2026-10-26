@@ -71,7 +71,7 @@ async function build(arch) {
     await copy('docs', path.join(appRoot, 'docs'));
     for (const file of ['package.json', 'package-lock.json', 'README.md']) await copy(file, path.join(appRoot, file));
     await mkdir(path.join(appRoot, 'demo-project'), { recursive: true });
-    await copy('demo-project/index.html', path.join(appRoot, 'demo-project/index.html'));
+    await copy('packaging/demo-index.html', path.join(appRoot, 'demo-project/index.html'));
     const fsSource = 'upstream/mcp-servers/src/filesystem';
     const fsDest = path.join(appRoot, fsSource);
     await mkdir(fsDest, { recursive: true });

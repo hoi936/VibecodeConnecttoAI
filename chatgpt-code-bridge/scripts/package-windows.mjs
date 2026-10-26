@@ -73,7 +73,7 @@ try {
   await copy('package-lock.json', path.join(stage, 'package-lock.json'));
   await copy('README.md', path.join(stage, 'README.md'));
   await mkdir(path.join(stage, 'demo-project'), { recursive: true });
-  await copy('demo-project/index.html', path.join(stage, 'demo-project/index.html'));
+  await copy('packaging/demo-index.html', path.join(stage, 'demo-project/index.html'));
   const fsSource = 'upstream/mcp-servers/src/filesystem';
   const fsDest = path.join(stage, fsSource);
   await mkdir(fsDest, { recursive: true });
@@ -129,8 +129,9 @@ with zipfile.ZipFile(sys.argv[3]) as z:
     '3. Trinh duyet se mo http://127.0.0.1:3213/. Chon Du an & file de doi thu muc lam viec.',
     '4. ChatGPT: can Tunnel ID va Runtime API Key cua tai khoan du dieu kien.',
     '5. Gemini/Claude/Grok: bam Tao URL va ket noi tren giao dien, cho URL MCP /mcp hien ra, roi copy vao website AI.',
-    '6. Du lieu cau hinh o %LOCALAPPDATA%\\CodeBridge; khong xoa neu muon giu workspace va Tunnel ID.',
-    '7. Quick Tunnel doi URL khi mo lai. Voi URL HTTPS co dinh, quyen OAuth con han duoc khoi phuc; tunnel ben ngoai can chay lai.',
+    '6. VS Code/Codex va Antigravity: mo cac muc IDE trong dashboard de them cong cu MCP local.',
+    '7. Du lieu cau hinh o %LOCALAPPDATA%\\CodeBridge; khong xoa neu muon giu workspace va ket noi.',
+    '8. Quick Tunnel doi URL khi mo lai. Voi URL HTTPS co dinh, quyen OAuth con han duoc khoi phuc; tunnel ben ngoai can chay lai.',
     '',
     'Chi su dung file tai ve tu nguon ban tin cay. CodeBridge.exe chua duoc ky so.',
     'Huong dan day du: README.md va docs\\.',

@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=0.3.7">
-  <link rel="stylesheet" href="terminal.css?v=0.3.7">
+  <link rel="stylesheet" href="style.css?v=0.3.8">
+  <link rel="stylesheet" href="terminal.css?v=0.3.8">
 </head>
 <body>
   <!-- Ambient Atmospheric Lighting -->
@@ -23,7 +23,7 @@
       <span class="mark">⌘</span>
       <span>Code Bridge<small>YOUR LOCAL COMPANION</small></span>
     </a>
-    
+
     <div class="nav-label">KHÔNG GIAN LÀM VIỆC</div>
     <nav aria-label="Điều hướng chính">
       <a href="#overview" data-view="overview"><span>⌂</span> Trang chủ</a>
@@ -32,21 +32,23 @@
       <a href="#claude" data-view="claude"><span class="nav-provider cla">✳</span> Claude <b id="claude-nav-count">0</b></a>
       <a href="#grok" data-view="grok"><span class="nav-provider gro">𝕏</span> Grok <b id="grok-nav-count">0</b></a>
       <a href="#meta" data-view="meta"><span class="nav-provider met">◉</span> Meta AI</a>
-      
+      <a href="#vscode" data-view="vscode"><span class="nav-provider vsc">⬡</span> VS Code / Codex <b id="vscode-nav-badge" class="vsc-new-badge">MCP</b></a>
+      <a href="#antigravity" data-view="antigravity"><span class="nav-provider agy">✦</span> Antigravity <b id="antigravity-nav-badge" class="agy-new-badge">MCP</b></a>
+
       <div class="nav-divider"></div>
-      
+
       <a href="#workspace" data-view="workspace"><span>▱</span> Dự án & file</a>
       <a href="#tools" data-view="tools"><span>⌘</span> Công cụ MCP</a>
       <a href="#activity" data-view="activity"><span>◷</span> Nhật ký hoạt động</a>
     </nav>
-    
+
     <div class="sidebar-project">
       <span class="nav-label">DỰ ÁN ĐANG CHỌN</span>
       <strong id="sidebar-project">Đang tải…</strong>
       <small id="sidebar-permission"></small>
       <a href="#workspace">Quản lý dự án ↗</a>
     </div>
-    
+
     <div class="sidebar-note">
       <span class="dot"></span>
       <div>
@@ -67,11 +69,11 @@
 
     <main>
       <div id="notice" role="status" hidden></div>
-      
+
       <div id="upgrade-notice" class="info-box" hidden>
         Đây là phiên bridge cũ trên cổng 3210; biểu mẫu kết nối nhiều tài khoản chỉ hoạt động ở <a href="http://127.0.0.1:3213">giao diện mới cổng 3213</a>. Nếu cổng 3213 chưa mở, chạy START-BRIDGE-LINUX.sh hoặc START-BRIDGE-WINDOWS.bat từ thư mục chatgpt-code-bridge.
       </div>
-      
+
       <div id="backend-upgrade-notice" class="info-box" hidden>
         Phiên Code Bridge đang chạy chưa có tính năng tạo URL tự động. Hãy hoàn tất công việc hiện tại, đóng ứng dụng cũ đang dùng cổng này, mở bản mới rồi tải lại trang. Quyền OAuth đang có cần được cấp lại sau khi khởi động lại.
       </div>
@@ -183,7 +185,63 @@
             </div>
           </a>
 
-          <!-- Meta Choice -->
+          <!-- VS Code Web Mode Choice -->
+          <a class="choice-card vscode-choice" href="#vscode" aria-label="Kết nối VS Code và Codex">
+            <div class="choice-top">
+              <span class="choice-logo vsc">⬡</span>
+              <span id="vscode-home-status" class="choice-status">Công cụ MCP</span>
+            </div>
+            <div class="choice-heading">
+              <span class="choice-eyebrow">KHÔNG GIAN 06 · MỚI</span>
+              <h2>VS Code / Codex<span aria-hidden="true">↗</span></h2>
+              <p>Đưa công cụ dự án vào chat Agent của VS Code hoặc Codex. Chọn model trong IDE.</p>
+            </div>
+            <div class="connection-art" aria-hidden="true">
+              <span class="art-chat">⬡<small>VS Code</small></span>
+              <i>······</i>
+              <span class="art-bridge">⌘</span>
+              <i>······</i>
+              <span class="art-folder">🌐<small>Web AI</small></span>
+            </div>
+            <div class="choice-features">
+              <span>✓ Chọn model Web ngay trong editor</span>
+              <span>✓ MCP tools dùng chung bridge</span>
+            </div>
+            <div class="choice-bottom">
+              <span><b id="vscode-home-model">MCP cục bộ</b></span>
+              <strong>Vào không gian <span aria-hidden="true">→</span></strong>
+            </div>
+          </a>
+
+          <!-- Google Antigravity & Gemini 4 Argon Choice -->
+          <a class="choice-card antigravity-choice" href="#antigravity" aria-label="Mở hướng dẫn kết nối Antigravity MCP">
+            <div class="choice-top">
+              <span class="choice-logo agy">✦</span>
+              <span id="antigravity-home-status" class="choice-status">Sẵn sàng</span>
+            </div>
+            <div class="choice-heading">
+              <span class="choice-eyebrow">ANTIGRAVITY · MCP</span>
+              <h2>Google Antigravity<span aria-hidden="true">↗</span></h2>
+              <p>Thêm công cụ dự án vào Antigravity. Đăng nhập và chọn model trong ứng dụng Google.</p>
+            </div>
+            <div class="connection-art agy-art" aria-hidden="true">
+              <span class="art-chat agy-node">✦<small>Antigravity</small></span>
+              <i class="agy-beam">······</i>
+              <span class="art-bridge">⌘</span>
+              <i class="agy-beam">······</i>
+              <span class="art-folder agy-node">⚡<small>Dự án</small></span>
+            </div>
+            <div class="choice-features">
+              <span>✓ Công cụ MCP cho dự án</span>
+              <span>✓ Hỗ trợ cấu hình .agents/mcp_config.json</span>
+            </div>
+            <div class="choice-bottom">
+              <span><b id="antigravity-home-model">MCP cục bộ</b></span>
+              <strong>Vào không gian <span aria-hidden="true">→</span></strong>
+            </div>
+          </a>
+
+          <!-- Meta Choice (moved after VS Code) -->
           <a class="choice-card meta-choice" href="#meta" aria-label="Xem tình trạng kết nối Meta AI">
             <div class="choice-top">
               <span class="choice-logo">◉</span>
@@ -243,7 +301,7 @@
       <!-- PROVIDER MANAGEMENT VIEW (#provider) -->
       <div id="provider" class="view" hidden>
         <a href="#overview" class="back-home">← Trở về trang chủ</a>
-        
+
         <div class="provider-hero">
           <div class="provider-hero-main">
             <span id="provider-icon" class="provider-hero-icon">C</span>
@@ -615,7 +673,71 @@
         </section>
       </div>
 
-      <!-- WORKSPACE VIEW -->
+      <!-- VS CODE / CODEX IDE MCP VIEW -->
+      <section id="vscode" class="view" hidden>
+        <div class="vscode-hero">
+          <div class="vscode-hero-inner">
+            <span class="vscode-hero-icon">⬡</span>
+            <div>
+              <span class="eyebrow">CODE BRIDGE · IDE</span>
+              <h1>Dùng công cụ Code Bridge<br>trong <em>VS Code</em></h1>
+              <p>Kết nối VS Code hoặc Codex với MCP cục bộ để agent đọc và sửa dự án bạn chọn. Model chat và tài khoản được chọn trong extension của IDE.</p>
+            </div>
+          </div>
+        </div>
+        <div class="vscode-section">
+          <div class="section-heading"><div><span class="eyebrow">BƯỚC 01 · KHỞI ĐỘNG</span><h2>Mở Code Bridge và chọn dự án</h2></div></div>
+          <p>Giữ ứng dụng chạy, vào <a href="#workspace">Dự án &amp; file</a> chọn đúng thư mục và quyền đọc/ghi. MCP cục bộ: <code id="vsc-endpoint-note">Đang tải…</code></p>
+        </div>
+        <div class="vscode-section">
+          <div class="section-heading"><div><span class="eyebrow">BƯỚC 02A · GITHUB COPILOT</span><h2>Thêm MCP vào VS Code</h2></div><button id="vsc-copy-mcp" class="secondary small">Sao chép</button></div>
+          <p>Trong Command Palette chọn <strong>MCP: Add Server</strong> → <strong>HTTP</strong>, nhập URL ở trên và đặt tên <code>code-bridge</code>. Hoặc tạo <code>.vscode/mcp.json</code> trong workspace bằng cấu hình sau. Chọn chế độ Agent và bật công cụ Code Bridge trong Tools.</p>
+          <p><button id="vsc-auto-configure" class="secondary small">Thêm MCP vào dự án đã chọn</button> <span id="vsc-config-status" class="muted">Đang kiểm tra…</span></p>
+          <pre class="vsc-snippet" id="vsc-mcp-snippet">Đang tải…</pre>
+        </div>
+        <div class="vscode-section">
+          <div class="section-heading"><div><span class="eyebrow">BƯỚC 02B · CODEX EXTENSION</span><h2>Thêm MCP cho Codex trong VS Code</h2></div><button id="vsc-copy-codex" class="secondary small">Sao chép</button></div>
+          <p>Đăng nhập extension Codex bằng tài khoản ChatGPT của bạn. Thêm đoạn này vào <code>~/.codex/config.toml</code>, rồi mở lại phiên Codex. Extension chọn model theo quyền tài khoản; Code Bridge chỉ cung cấp công cụ.</p>
+          <pre class="vsc-snippet" id="vsc-codex-snippet">Đang tải…</pre>
+        </div>
+        <div class="vscode-section">
+          <div class="section-heading"><div><span class="eyebrow">KIỂM TRA</span><h2>Thử một lệnh đọc file</h2></div></div>
+          <p>Trong chat Agent của IDE, yêu cầu: “Dùng Code Bridge liệt kê các file trong dự án hiện tại”. Nếu thấy lời gọi công cụ MCP và kết quả, kết nối đã hoạt động. Danh sách model trong IDE do Copilot hoặc Codex cung cấp; MCP không thay đổi danh sách đó và không chuyển tài khoản ChatGPT/Gemini Web thành model IDE.</p>
+        </div>
+      </section>
+
+      <!-- GOOGLE ANTIGRAVITY MCP VIEW -->
+      <section id="antigravity" class="view" hidden>
+        <div class="antigravity-hero">
+          <div class="antigravity-hero-inner">
+            <span class="antigravity-hero-icon">✦</span>
+            <div>
+              <span class="eyebrow">GOOGLE ANTIGRAVITY · MCP</span>
+              <h1>Dùng Code Bridge<br>trong <em>Antigravity</em></h1>
+              <p>Thêm công cụ đọc và sửa dự án vào Antigravity App, CLI hoặc IDE. Đăng nhập Google và chọn model ngay trong Antigravity; Code Bridge không đổi quyền model của tài khoản.</p>
+            </div>
+          </div>
+        </div>
+        <div class="antigravity-section agy-spotlight-section">
+          <div class="section-heading"><div><span class="eyebrow">BƯỚC 01 · CẤU HÌNH CÔNG CỤ</span><h2>Thêm MCP vào dự án</h2></div><span class="badge" id="agy-config-badge">Đang kiểm tra…</span></div>
+          <p>Chọn dự án trong Code Bridge và giữ ứng dụng chạy. Nút bên dưới thêm server <code>code-bridge</code> vào <code>.agents/mcp_config.json</code> của dự án đang chọn; các server khác trong file được giữ lại.</p>
+          <p id="agy-target-ws" class="muted">Đang tải…</p>
+          <button id="agy-auto-configure" class="agy-primary-btn">Thêm Code Bridge MCP</button>
+          <div id="agy-config-success" class="agy-alert-success" hidden>Đã thêm công cụ MCP. Mở lại cấu hình MCP trong Antigravity để tải server.</div>
+        </div>
+        <div class="antigravity-section">
+          <div class="section-heading"><div><span class="eyebrow">CẤU HÌNH THỦ CÔNG</span><h2>Nội dung mcp_config.json</h2></div><button id="agy-copy-mcp" class="secondary small">Sao chép</button></div>
+          <p>Dùng trong <code>.agents/mcp_config.json</code> của dự án hoặc cấu hình toàn cục <code>~/.gemini/config/mcp_config.json</code>. URL localhost phải truy cập được từ nơi Antigravity chạy.</p>
+          <pre class="agy-snippet" id="agy-mcp-snippet">Đang tải…</pre>
+        </div>
+        <div class="antigravity-section">
+          <div class="section-heading"><div><span class="eyebrow">BƯỚC 02 · MODEL</span><h2>Chọn model trong Antigravity</h2></div></div>
+          <p>Đăng nhập tài khoản Google của bạn trong Antigravity rồi mở menu model dưới ô chat. Để vibe code trong VS Code như ảnh, dùng <a href="https://antigravity.google/docs/ide/extensions/vscode/" target="_blank" rel="noopener">Antigravity extension chính thức</a>. Model hiện ra tùy gói, sản phẩm và khu vực. Theo tài liệu Google hiện tại, <strong>Gemini 4 Argon có trên gói Google AI Pro trả phí ở Antigravity App, CLI và extension IDE, nhưng chưa có trong Antigravity IDE độc lập</strong>. Nếu dùng Antigravity IDE và không thấy Argon, Code Bridge không thể mở khóa model đó.</p>
+          <p><a href="https://www.antigravity.google/docs/models/" target="_blank" rel="noopener">Xem bảng model chính thức của Google ↗</a></p>
+          <p>Nếu bạn cần trò chuyện trực tiếp trên <a href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini Web</a>, dùng mục <a href="#gemini">Gemini Web</a> của Code Bridge. Đó là một kết nối khác với model selector của Antigravity.</p>
+        </div>
+      </section>
+
       <section id="workspace" class="view" hidden>
         <div class="section-heading">
           <div>
@@ -632,7 +754,7 @@
           <button>Dùng thư mục này</button>
         </form>
         <p class="muted" style="margin-top: 10px;">Mặc định là dự án mẫu để thử đọc, sửa và xem preview.</p>
-        
+
         <div class="editor-layout">
           <div class="files">
             <div class="row">
@@ -649,7 +771,7 @@
             <textarea id="file-content" spellcheck="false" placeholder="Nội dung file sẽ xuất hiện ở đây…"></textarea>
           </div>
         </div>
-        
+
         <details style="margin-top: 24px;">
           <summary>Preview HTML tĩnh</summary>
           <p class="muted">Hiển thị index.html trong workspace. Dự án React/Vite cần dev server riêng.</p>
@@ -711,6 +833,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="app.js?v=0.3.7"></script>
+  <script type="module" src="app.js?v=0.3.8"></script>
 </body>
 </html>

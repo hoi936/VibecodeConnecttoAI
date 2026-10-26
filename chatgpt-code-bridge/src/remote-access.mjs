@@ -209,6 +209,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
     publicOrigin = checked;
     loadState(checked);
     const app = express(); app.disable('x-powered-by');
+    app.set('trust proxy', true);
     app.use((req, res, next) => {
       // Reverse proxies may preserve the public host or rewrite it to loopback.
       const allowedHosts = [new URL(publicOrigin).host, `127.0.0.1:${port}`, `localhost:${port}`];
@@ -227,10 +228,20 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
     });
     app.use(express.json({ limit: '1mb' }));
     app.use(express.urlencoded({ extended: false, limit: '16kb' }));
-    // The SDK's registration rate limiter rejects Cloudflare's X-Forwarded-For
+    // The SDK's registration and token rate limiters reject Cloudflare's X-Forwarded-For
     // unless Express trusts the proxy. Registration is already bounded by the
     // short-lived client store above, and this listener only accepts loopback.
-    app.use(mcpAuthRouter({ provider, issuerUrl: new URL(publicOrigin), resourceServerUrl: new URL(endpoint()), scopesSupported: ['mcp'], resourceName: 'Code Bridge Workspace', clientRegistrationOptions: { rateLimit: false } }));
+    app.use(mcpAuthRouter({
+      provider,
+      issuerUrl: new URL(publicOrigin),
+      resourceServerUrl: new URL(endpoint()),
+      scopesSupported: ['mcp'],
+      resourceName: 'Code Bridge Workspace',
+      clientRegistrationOptions: { rateLimit: false },
+      tokenOptions: { rateLimit: false },
+      authorizationOptions: { rateLimit: false },
+      revocationOptions: { rateLimit: false },
+    }));
     app.get('/connect/:id/:ticket', (req, res) => {
       clean(); const entry = pending.get(req.params.id);
       if (!entry || entry.browserTicket !== req.params.ticket) return res.status(410).send(`Yêu cầu không tồn tại hoặc đã hết hạn. Kết nối lại từ ${displayName}.`);

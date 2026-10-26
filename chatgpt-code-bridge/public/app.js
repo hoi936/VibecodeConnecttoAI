@@ -75,6 +75,8 @@ async function refresh() {
   $('endpoint').textContent = state.endpoint;
   renderGemini();
   renderOtherRemote();
+  renderVscode();
+  renderAntigravity();
   const statuses = { stopped: 'Chưa kết nối', starting: 'Đang khởi động', connecting: 'Đang kết nối', ready: '● Sẵn sàng', stopping: 'Đang dừng', error: 'Lỗi kết nối' };
   const chatgpt = (state.connections || []).filter(c => c.provider === 'chatgpt');
   const currentTunnel = chatgpt.find(c => c.state === 'error') || chatgpt.find(c => c.state === 'connecting' || c.state === 'starting') || chatgpt[0];
@@ -287,10 +289,56 @@ const providerQueries = { chatgpt: '', gemini: '', claude: '', grok: '', meta: '
 const providerName = mode => ({ chatgpt: 'ChatGPT', gemini: 'Gemini', claude: 'Claude', grok: 'Grok', meta: 'Meta AI' }[mode] || mode);
 const stateName = value => ({ ready: 'Tunnel sẵn sàng', authorized: 'Đã cấp quyền', paused: 'Đã tạm dừng', stopped: 'Đã dừng', offline: 'Phiên cũ đã tắt', starting: 'Đang khởi động', connecting: 'Đang kết nối', stopping: 'Đang dừng', error: 'Lỗi kết nối', unknown: 'Chưa xác định' }[value] || value);
 function node(tag, text, className) { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; }
+
+// ── VS CODE / CODEX MCP CONNECTION ─────────────────────────────────────────
+function renderVscode() {
+  const vs = state?.vscodeMode;
+  if (!vs) return;
+  const endpoint = $('vsc-endpoint-note'); if (endpoint) endpoint.textContent = vs.mcpEndpoint;
+  const configured = $('vsc-config-status'); if (configured) configured.textContent = vs.isConfigured ? '● Đã thêm vào .vscode/mcp.json' : 'Chưa thêm vào dự án';
+  const mcp = $('vsc-mcp-snippet'); if (mcp) mcp.textContent = vs.vscodeSnippet;
+  const codex = $('vsc-codex-snippet'); if (codex) codex.textContent = vs.codexSnippet;
+}
+$('vsc-auto-configure').onclick = protect(async () => {
+  await api('/api/vscode/configure', {});
+  state = await api('/api/status'); renderVscode();
+  notify('Đã thêm Code Bridge vào .vscode/mcp.json của dự án.');
+});
+$('vsc-copy-mcp').onclick = protect(async () => {
+  await navigator.clipboard.writeText(state?.vscodeMode?.vscodeSnippet || '');
+  notify('Đã sao chép cấu hình MCP cho VS Code.');
+});
+$('vsc-copy-codex').onclick = protect(async () => {
+  await navigator.clipboard.writeText(state?.vscodeMode?.codexSnippet || '');
+  notify('Đã sao chép cấu hình MCP cho Codex.');
+});
+
+// ── GOOGLE ANTIGRAVITY MCP CONNECTION ──────────────────────────────────────
+function renderAntigravity() {
+  const agy = state?.antigravityMode;
+  if (!agy) return;
+  const homeStatus = $('antigravity-home-status');
+  if (homeStatus) homeStatus.textContent = agy.isConfigured ? '● MCP đã thêm' : 'Chưa cấu hình';
+  const badge = $('agy-config-badge');
+  if (badge) { badge.textContent = agy.isConfigured ? '● Đã cấu hình' : 'Chưa cấu hình'; badge.classList.toggle('ready', agy.isConfigured); }
+  const target = $('agy-target-ws'); if (target) target.textContent = `Dự án: ${agy.workspace}`;
+  const snippet = $('agy-mcp-snippet'); if (snippet) snippet.textContent = agy.mcpConfigSnippet;
+}
+$('agy-auto-configure').onclick = protect(async () => {
+  await api('/api/antigravity/configure', {});
+  state = await api('/api/status'); renderAntigravity();
+  $('agy-config-success').hidden = false;
+  notify('Đã thêm Code Bridge vào cấu hình MCP của dự án.');
+});
+$('agy-copy-mcp').onclick = protect(async () => {
+  await navigator.clipboard.writeText(state?.antigravityMode?.mcpConfigSnippet || '');
+  notify('Đã sao chép cấu hình MCP cho Antigravity.');
+});
+
 function route() {
   const requested = location.hash.slice(1);
   const provider = ['chatgpt', 'gemini', 'claude', 'grok', 'meta'].includes(requested) ? requested : requested === 'connection' ? 'chatgpt' : null;
-  const view = provider ? 'provider' : ['workspace', 'tools', 'activity'].includes(requested) ? requested : 'overview';
+  const view = provider ? 'provider' : ['workspace', 'tools', 'activity', 'vscode', 'antigravity'].includes(requested) ? requested : 'overview';
   if (provider) {
     if (selectedProvider !== provider) {
       providerQueries[selectedProvider] = $('connection-search').value;
@@ -301,7 +349,7 @@ function route() {
   }
   for (const el of document.querySelectorAll('.view')) el.hidden = el.id !== view;
   for (const link of document.querySelectorAll('nav [data-view]')) { if (link.dataset.view === (provider || view)) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current'); }
-  $('view-name').textContent = provider ? providerName(provider) : { overview: 'Trang chủ', workspace: 'Dự án & file', tools: 'Công cụ MCP', activity: 'Nhật ký' }[view];
+  $('view-name').textContent = provider ? providerName(provider) : { overview: 'Trang chủ', workspace: 'Dự án & file', tools: 'Công cụ MCP', activity: 'Nhật ký', vscode: 'VS Code / Codex', antigravity: 'Google Antigravity · Argon 4' }[view];
   document.title = `Code Bridge · ${$('view-name').textContent}`;
   document.body.dataset.provider = provider || 'home';
   if (state) renderHub();
