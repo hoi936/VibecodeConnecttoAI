@@ -1,6 +1,5 @@
 const $ = id => document.getElementById(id);
 let state, selectedFile = '', noticeTimer;
-const authorizationResume = new Map();
 $('workspace').querySelector('.section-heading').insertAdjacentHTML('afterend', '<div class="terminal-permission"><div><strong>Quyền terminal trên máy</strong><p class="muted">Mặc định tắt mỗi khi mở Code Bridge. Khi bật, lệnh chạy với quyền của tài khoản máy tính này và có thể tạo tiến trình nền. Thư mục dự án chỉ là nơi bắt đầu, không giới hạn quyền truy cập. Cấp quyền riêng cho từng kết nối ChatGPT hoặc khi duyệt Gemini/Claude/Grok.</p></div><label class="toggle"><input id="allow-terminal" type="checkbox"> Bật terminal</label></div>');
 function notify(message, error = false) { $('notice').hidden = false; $('notice').textContent = message; $('notice').className = error ? 'error' : ''; clearTimeout(noticeTimer); noticeTimer = setTimeout(() => $('notice').hidden = true, 6000); }
 async function api(url, body) {
@@ -27,15 +26,6 @@ function showAuthorizationResume(container, url, provider) {
   copy.onclick = protect(async () => { await navigator.clipboard.writeText(url); notify('Đã sao chép. Dán vào cửa sổ Chrome đang đăng nhập Gemini để hoàn tất.'); });
   const actions = document.createElement('div'); actions.className = 'row'; actions.append(link, copy);
   card.append(message, actions); container.prepend(card);
-}
-function rememberAuthorizationResume(provider, url) {
-  if (url) authorizationResume.set(provider, { url, expiresAt: Date.now() + 5 * 60_000 });
-}
-function renderAuthorizationResume(container, provider, label) {
-  const entry = authorizationResume.get(provider);
-  if (!entry) return;
-  if (entry.expiresAt <= Date.now()) { authorizationResume.delete(provider); return; }
-  showAuthorizationResume(container, entry.url, label);
 }
 async function resumeAuthorization(provider, id) {
   const tab = window.open('about:blank', '_blank');
@@ -146,7 +136,7 @@ function renderGemini() {
   $('copy-gemini-endpoint').disabled = !gemini.enabled;
   $('gemini-activity').textContent = gemini.lastCallAt ? `Kết nối MCP gần nhất: ${new Date(gemini.lastCallAt).toLocaleString('vi-VN')} · ${gemini.grantedCount} quyền còn hiệu lực` : `${gemini.grantedCount} quyền còn hiệu lực · Chưa có yêu cầu MCP được xác thực.`;
   const container = $('gemini-pending');
-  const pendingKey = JSON.stringify({ pending: gemini.pending, awaitingCompletion: gemini.awaitingCompletion, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
+  const pendingKey = JSON.stringify({ pending: gemini.pending, awaitingCompletion: gemini.awaitingCompletion, grantedCount: gemini.grantedCount, publicOrigin: gemini.publicOrigin, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
   if (container.dataset.requests === pendingKey) return;
   container.dataset.requests = pendingKey;
   container.replaceChildren();
@@ -176,12 +166,11 @@ function renderGemini() {
     const buttons = document.createElement('div'); buttons.className = 'row';
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
-      button.onclick = protect(async () => { const result = await api(`/api/gemini/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); if (action === 'approve') rememberAuthorizationResume('gemini', result.continueUrl); await refresh(); notify(action === 'approve' ? 'Đã duyệt. Nếu Gemini chưa liên kết, bấm Hoàn tất liên kết bên dưới.' : 'Đã từ chối kết nối.'); });
+      button.onclick = protect(async () => { await api(`/api/gemini/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); await refresh(); notify(action === 'approve' ? 'Đã duyệt. Nếu Gemini chưa liên kết, bấm Hoàn tất liên kết bên dưới.' : 'Đã từ chối kết nối.'); });
       buttons.append(button);
     }
     card.append(title, description, redirect, context, nameLabel, terminalLabel, buttons); container.append(card);
   }
-  renderAuthorizationResume(container, 'gemini', 'Gemini');
 }
 const remoteSites = {
   claude: { name: 'Claude', url: 'https://claude.ai/customize/connectors', info: 'Claude Web: Customize → Connectors → + Add → Add custom connector. Nếu dùng Team/Enterprise, quản trị viên phải thêm connector trước.', steps: ['Mở Customize → Connectors → + Add → Add custom connector; nhập tên Code Bridge và dán URL MCP có đuôi /mcp.', 'Chọn Sign in now hoặc Sign in when needed. Ở OAuth client, chọn Register automatically để dùng đăng ký OAuth của Code Bridge. Hoàn tất Add rồi bấm Connect.', 'Khi trang xin quyền mở, đối chiếu mã ở Code Bridge và bấm Cho phép. Trong cuộc chat, bật connector bằng nút + → Connectors rồi thử đọc file.'] },
@@ -215,7 +204,7 @@ function renderOtherRemote() {
   $('copy-remote-endpoint').disabled = !remote.enabled;
   $('remote-activity').textContent = remote.lastCallAt ? `Lệnh MCP gần nhất: ${new Date(remote.lastCallAt).toLocaleString('vi-VN')} · ${remote.grantedCount} quyền còn hiệu lực.` : `${remote.grantedCount} quyền còn hiệu lực · Chưa có lệnh MCP được xác thực.`;
   const container = $('remote-pending');
-  const pendingKey = JSON.stringify({ provider, pending: remote.pending, awaitingCompletion: remote.awaitingCompletion, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
+  const pendingKey = JSON.stringify({ provider, pending: remote.pending, awaitingCompletion: remote.awaitingCompletion, grantedCount: remote.grantedCount, publicOrigin: remote.publicOrigin, allowWrites: state.allowWrites, terminalEnabled: state.terminalEnabled });
   if (container.dataset.requests === pendingKey) return;
   container.dataset.requests = pendingKey;
   container.replaceChildren();
@@ -242,12 +231,11 @@ function renderOtherRemote() {
     const buttons = document.createElement('div'); buttons.className = 'row';
     for (const [action, label] of [['approve', 'Cho phép'], ['deny', 'Từ chối']]) {
       const button = document.createElement('button'); button.textContent = label; button.className = action === 'deny' ? 'secondary small' : 'small';
-      button.onclick = protect(async () => { const result = await api(`/api/${provider}/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); if (action === 'approve') rememberAuthorizationResume(provider, result.continueUrl); await refresh(); notify(action === 'approve' ? `Đã duyệt. Nếu ${site.name} chưa liên kết, bấm Hoàn tất liên kết bên dưới.` : 'Đã từ chối kết nối.'); });
+      button.onclick = protect(async () => { await api(`/api/${provider}/${action}`, { id: request.id, label: nameInput.value.trim(), allowTerminal: action === 'approve' && terminalInput.checked }); await refresh(); notify(action === 'approve' ? `Đã duyệt. Nếu ${site.name} chưa liên kết, bấm Hoàn tất liên kết bên dưới.` : 'Đã từ chối kết nối.'); });
       buttons.append(button);
     }
     card.append(title, description, redirect, context, nameLabel, terminalLabel, buttons); container.append(card);
   }
-  renderAuthorizationResume(container, provider, site.name);
 }
 async function files(directory = '.') {
   const text = resultText(await tool('list_directory', { path: directory }));
