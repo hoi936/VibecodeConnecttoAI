@@ -10,6 +10,7 @@ import { InvalidClientMetadataError, InvalidGrantError, InvalidScopeError, Inval
 const nonce = () => randomBytes(32).toString('base64url');
 const digest = value => createHash('sha256').update(value).digest('hex');
 const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const callbackPage = (url, provider) => `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="refresh" content="0;url=${escapeHtml(url)}"><title>Hoàn tất kết nối ${provider}</title><p>Đang chuyển về ${provider} để hoàn tất liên kết.</p><p>Nếu trang không tự chuyển, <a href="${escapeHtml(url)}">bấm vào đây</a>.</p></html>`;
 const now = () => Math.floor(Date.now() / 1000);
 
 export function validatePublicOrigin(value) {
@@ -162,7 +163,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
     const connections = [...grants.values()].filter(g => g.authorizedAt && g.workspace === getContext().workspace).map(g => ({ id: g.id, provider: providerName, label: g.label, clientName: g.clientName, state: g.paused ? 'paused' : 'authorized', workspace: g.workspace, allowWrites: g.allowWrites && getContext().allowWrites, allowTerminal: g.allowTerminal === true && getContext().allowTerminal === true, startedAt: g.authorizedAt, lastCallAt: g.lastCallAt || null, expiresAt: g.expiresAt }));
     return { enabled, publicOrigin, endpoint: publicOrigin ? endpoint() : '', localTarget: `http://127.0.0.1:${port}`, lastCallAt, grantedCount: connections.length, connections,
       pending: [...pending.values()].filter(p => p.status === 'pending').map(p => ({ id: p.id, clientName: p.clientName, redirectUri: p.params.redirectUri, workspace: p.workspace, allowWrites: p.allowWrites, expiresAt: p.expiresAt })),
-      awaitingCompletion: [...pending.values()].filter(p => p.status === 'approved').map(p => ({ id: p.id, clientName: p.clientName, expiresAt: p.expiresAt })) };
+      awaitingCompletion: [...pending.values()].filter(p => p.status === 'approved' && !p.completedRedirect).map(p => ({ id: p.id, clientName: p.clientName, expiresAt: p.expiresAt })) };
   }
   function approve(id, label, allowTerminal = false) {
     clean(); const entry = pending.get(id), context = getContext();
@@ -182,7 +183,7 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
   function deny(id) { const entry = pending.get(id); if (entry) entry.status = 'denied'; }
   function continuation(id) {
     clean(); const entry = pending.get(id);
-    if (!entry || entry.status !== 'approved' || entry.workspace !== getContext().workspace) throw new Error('Yêu cầu đã hết hạn. Hãy bắt đầu kết nối lại từ trang của nhà cung cấp.');
+    if (!entry || entry.status !== 'approved' || entry.completedRedirect || entry.workspace !== getContext().workspace) throw new Error('Yêu cầu đã hết hạn. Hãy bắt đầu kết nối lại từ trang của nhà cung cấp.');
     return { continueUrl: `${publicOrigin}/connect/${entry.id}/${entry.browserTicket}` };
   }
   function checkedLabel(label) { if (typeof label !== 'string' || !label.trim() || label.trim().length > 80) throw new Error('Tên kết nối cần từ 1 đến 80 ký tự.'); return label.trim(); }
@@ -257,6 +258,9 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
       if (!entry || entry.browserTicket !== req.params.ticket) return res.status(410).send(`Yêu cầu không tồn tại hoặc đã hết hạn. Kết nối lại từ ${displayName}.`);
       if (entry.workspace !== getContext().workspace) { pending.delete(entry.id); return res.status(410).send('Workspace đã thay đổi. Kết nối lại.'); }
       if (entry.status === 'approved' || entry.status === 'denied') {
+        if (entry.status === 'approved' && entry.completedRedirect) {
+          return res.type('html').send(callbackPage(entry.completedRedirect, displayName));
+        }
         const redirect = new URL(entry.params.redirectUri);
         if (entry.params.state !== undefined) redirect.searchParams.set('state', entry.params.state);
         if (entry.status === 'denied') redirect.searchParams.set('error', 'access_denied');
@@ -268,6 +272,11 @@ export function createRemoteAccess({ getContext, handleMcp, log = () => {}, port
           const code = nonce();
           codes.set(digest(code), { clientId: entry.clientId, grantId: grant.id, challenge: entry.params.codeChallenge, redirectUri: entry.params.redirectUri, expiresAt: now() + 60 });
           redirect.searchParams.set('code', code);
+          if (providerName === 'gemini') {
+            entry.completedRedirect = redirect.href;
+            entry.expiresAt = now() + 60;
+            return res.type('html').send(callbackPage(redirect.href, displayName));
+          }
         }
         pending.delete(entry.id);
         return res.redirect(302, redirect.href);
