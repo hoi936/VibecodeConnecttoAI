@@ -23,7 +23,10 @@ function showAuthorizationResume(container, url, provider) {
   const message = document.createElement('p'); message.textContent = `Đã cho phép. Nếu ${provider} báo chưa liên kết, bấm nút dưới đây để hoàn tất xác thực trong tab mới.`;
   const link = document.createElement('a'); link.className = 'button small'; link.textContent = `Hoàn tất liên kết ${provider} ↗`;
   link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-  card.append(message, link); container.prepend(card);
+  const copy = document.createElement('button'); copy.className = 'secondary small'; copy.textContent = 'Sao chép liên kết';
+  copy.onclick = protect(async () => { await navigator.clipboard.writeText(url); notify('Đã sao chép. Dán vào cửa sổ Chrome đang đăng nhập Gemini để hoàn tất.'); });
+  const actions = document.createElement('div'); actions.className = 'row'; actions.append(link, copy);
+  card.append(message, actions); container.prepend(card);
 }
 function rememberAuthorizationResume(provider, url) {
   if (url) authorizationResume.set(provider, { url, expiresAt: Date.now() + 5 * 60_000 });
@@ -153,7 +156,10 @@ function renderGemini() {
     const message = document.createElement('p'); message.textContent = `Đã duyệt ${request.clientName}; đang chờ hoàn tất trên Gemini. Liên kết có hiệu lực đến ${new Date(request.expiresAt * 1000).toLocaleTimeString('vi-VN')}.`;
     const button = document.createElement('button'); button.className = 'small'; button.textContent = 'Hoàn tất liên kết Gemini ↗';
     button.onclick = protect(() => resumeAuthorization('gemini', request.id));
-    card.append(message, button); container.append(card);
+    const copy = document.createElement('button'); copy.className = 'secondary small'; copy.textContent = 'Sao chép liên kết';
+    copy.onclick = protect(async () => { const result = await api('/api/gemini/continue', { id: request.id }); await navigator.clipboard.writeText(result.continueUrl); notify('Đã sao chép. Dán vào cửa sổ Chrome đang đăng nhập Gemini.'); });
+    const actions = document.createElement('div'); actions.className = 'row'; actions.append(button, copy);
+    card.append(message, actions); container.append(card);
   }
   for (const request of gemini.pending) {
     const card = document.createElement('article'); card.className = 'approval-card';
