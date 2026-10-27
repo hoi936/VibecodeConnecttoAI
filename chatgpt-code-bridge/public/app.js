@@ -336,7 +336,24 @@ function renderVscode() {
   const configured = $('vsc-config-status'); if (configured) configured.textContent = vs.isConfigured ? '● Đã thêm vào .vscode/mcp.json' : 'Chưa thêm vào dự án';
   const mcp = $('vsc-mcp-snippet'); if (mcp) mcp.textContent = vs.vscodeSnippet;
   const codex = $('vsc-codex-snippet'); if (codex) codex.textContent = vs.codexSnippet;
+  renderCodexWebStatus(state?.codexWebMode);
 }
+function renderCodexWebStatus(web) {
+  const labels = {
+    ready: `● Đã thấy ${web?.modelCount || 0} model ChatGPT Web. Khởi động lại Codex nếu menu chưa cập nhật.`,
+    unavailable: 'Cầu nối đã được cấu hình nhưng chưa phản hồi. Hãy mở ứng dụng cầu nối và kiểm tra đăng nhập ChatGPT Web.',
+    no_web_models: 'Cầu nối đang chạy nhưng chưa công bố model ChatGPT Web. Kiểm tra trạng thái đăng nhập và cài model trong ứng dụng cầu nối.',
+    other_provider: 'Codex đang dùng một nhà cung cấp model khác. Đừng ghi đè cấu hình này khi chưa kiểm tra.',
+    invalid_url: 'Giá trị openai_base_url trong cấu hình Codex không hợp lệ.',
+    not_configured: 'Chưa thấy cầu nối model Web trong cấu hình Codex.'
+  };
+  const label = $('vsc-web-status'); if (label) label.textContent = labels[web?.state] || labels.not_configured;
+  const models = $('vsc-web-models'); if (models) models.textContent = web?.models?.length ? `Model: ${web.models.join(', ')}` : '';
+}
+$('vsc-check-web').onclick = protect(async () => {
+  state.codexWebMode = await api('/api/vscode/web-status');
+  renderCodexWebStatus(state.codexWebMode);
+});
 $('vsc-auto-configure').onclick = protect(async () => {
   await api('/api/vscode/configure', {});
   state = await api('/api/status'); renderVscode();

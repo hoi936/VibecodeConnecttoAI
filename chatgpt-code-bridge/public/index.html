@@ -697,12 +697,18 @@
         </div>
         <div class="vscode-section">
           <div class="section-heading"><div><span class="eyebrow">BƯỚC 02B · CODEX EXTENSION</span><h2>Thêm MCP cho Codex trong VS Code</h2></div><button id="vsc-copy-codex" class="secondary small">Sao chép</button></div>
-          <p>Đăng nhập extension Codex bằng tài khoản ChatGPT của bạn. Thêm đoạn này vào <code>~/.codex/config.toml</code>, rồi mở lại phiên Codex. Extension chọn model theo quyền tài khoản; Code Bridge chỉ cung cấp công cụ.</p>
+          <p>Đăng nhập extension Codex bằng tài khoản ChatGPT của bạn. Thêm đoạn này vào <code>~/.codex/config.toml</code>, rồi mở lại phiên Codex. Cấu hình này chỉ thêm công cụ Code Bridge.</p>
           <pre class="vsc-snippet" id="vsc-codex-snippet">Đang tải…</pre>
         </div>
         <div class="vscode-section">
+          <div class="section-heading"><div><span class="eyebrow">CHATGPT WEB · MODEL TRONG CODEX</span><h2>Kiểm tra model Web</h2></div><button id="vsc-check-web" class="secondary small">Kiểm tra lại</button></div>
+          <p id="vsc-web-status" role="status">Đang kiểm tra…</p>
+          <p id="vsc-web-models" class="muted"></p>
+          <p>Để có model <strong>(Web)</strong> trong menu Codex, cần một cầu nối ChatGPT Web cung cấp <code>/v1/models</code> và <code>/v1/responses</code> rồi cấu hình <code>openai_base_url</code> trong Codex. MCP ở trên không thêm model. Có thể dùng <a href="https://github.com/miuuyy/codex-chatgpt-web" target="_blank" rel="noopener noreferrer">dự án mã nguồn mở codex-chatgpt-web</a> để cài cầu nối, đăng nhập ChatGPT Web và bật tích hợp Codex; sau đó khởi động lại Codex và bấm Kiểm tra lại. Đây là tích hợp bên thứ ba, dùng phiên Web theo quyền tài khoản của bạn.</p>
+        </div>
+        <div class="vscode-section">
           <div class="section-heading"><div><span class="eyebrow">KIỂM TRA</span><h2>Thử một lệnh đọc file</h2></div></div>
-          <p>Trong chat Agent của IDE, yêu cầu: “Dùng Code Bridge liệt kê các file trong dự án hiện tại”. Nếu thấy lời gọi công cụ MCP và kết quả, kết nối đã hoạt động. Danh sách model trong IDE do Copilot hoặc Codex cung cấp; MCP không thay đổi danh sách đó và không chuyển tài khoản ChatGPT/Gemini Web thành model IDE.</p>
+          <p>Trong chat Agent của IDE, yêu cầu: “Dùng Code Bridge liệt kê các file trong dự án hiện tại”. Nếu thấy lời gọi công cụ MCP và kết quả, kết nối công cụ đã hoạt động. Với model ChatGPT Web, kiểm tra thêm trạng thái phía trên và chọn mục <strong>(Web)</strong> trong menu model Codex.</p>
         </div>
       </section>
 

@@ -15,6 +15,7 @@ import { createRemoteAccess } from './remote-access.mjs';
 import { createQuickTunnelManager } from './quick-tunnel-manager.mjs';
 import { canUseTerminal, createTerminalRunner, terminalTool } from './terminal.mjs';
 import { createVscodeProxy } from './vscode-proxy.mjs';
+import { codexWebStatus } from './codex-web-status.mjs';
 import { createAntigravityProxy } from './antigravity-proxy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -135,8 +136,9 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.get('/health', (req, res) => res.json({ ok: true, mcp: !!client, tunnel: connections().find(p => p.provider === 'chatgpt' && p.state === 'ready') ? 'ready' : 'stopped' }));
-app.get('/api/status', async (req, res) => res.json({ ...config, connectionMode: 'both', terminalEnabled, csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp`, vscodeMode: await vscodeProxy.status(origin), antigravityMode: await antigravityProxy.status() }));
+app.get('/api/status', async (req, res) => res.json({ ...config, connectionMode: 'both', terminalEnabled, csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp`, vscodeMode: await vscodeProxy.status(origin), codexWebMode: await codexWebStatus(), antigravityMode: await antigravityProxy.status() }));
 app.get('/api/vscode/status', async (req, res) => res.json(await vscodeProxy.status(origin)));
+app.get('/api/vscode/web-status', async (req, res) => res.json(await codexWebStatus()));
 app.post('/api/vscode/configure', async (req, res) => res.json(await vscodeProxy.configureWorkspace(origin)));
 app.get('/api/antigravity/status', async (req, res) => res.json(await antigravityProxy.status()));
 app.post('/api/antigravity/configure', async (req, res) => res.json(await antigravityProxy.configureWorkspace()));
