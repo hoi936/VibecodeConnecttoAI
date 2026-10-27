@@ -13,7 +13,7 @@ Code Bridge cấp **công cụ MCP** cho chat Agent trong VS Code. Muốn thấy
 Không cần cài ứng dụng của bên khác. Engine mã nguồn mở được ghim phiên bản và chạy như tiến trình con của Code Bridge; runtime được kiểm tra SHA-256 trước khi sử dụng.
 
 1. Mở **VS Code / Codex** → **Đăng nhập ChatGPT**. Lần đầu ứng dụng tự tải runtime và cài các thành phần cần thiết; bản đóng gói đã kèm các thành phần này.
-2. Đăng nhập trong cửa sổ Chrome riêng. Khi thấy ô chat ChatGPT, đóng toàn bộ cửa sổ Chrome riêng đó. Code Bridge mở bước xác minh, nhận diện quyền model của tài khoản và lưu phiên trong thư mục dữ liệu riêng. Không dán cookie hoặc token vào dashboard.
+2. Đăng nhập trong cửa sổ Chrome riêng. Khi thấy ô chat ChatGPT, quay lại Code Bridge bấm **Đã đăng nhập, tiếp tục**. Ứng dụng đóng đúng cửa sổ riêng đó, mở bước xác minh, nhận diện quyền model và lưu phiên trong thư mục dữ liệu riêng. Có thể bấm **Hủy đăng nhập** khi bị kẹt hoặc muốn thử lại; thời hạn đăng nhập tối đa 10 phút. Không dán cookie hoặc token vào dashboard.
 3. Bấm **Thêm model vào Codex**. Code Bridge chạy Responses bridge ở `http://127.0.0.1:3216/v1`, cập nhật cấu hình Codex và ghi lại giá trị trước đó để khôi phục.
 4. Mở phiên Codex mới hoặc chạy **Developer: Reload Window** trong VS Code. Chọn model có hậu tố **(Web)**. Chế độ ban đầu chỉ trò chuyện, chưa thao tác công cụ.
 5. Muốn sửa file và chạy terminal: trong phần **Cho model Web dùng công cụ lập trình**, nhập Tunnel ID riêng và Runtime API Key có quyền Tunnels Read + Use, rồi bấm bật công cụ. Không dùng Tunnel ID đang chạy ở trang ChatGPT → Code Bridge.

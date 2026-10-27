@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { bunPath, ensureBun, prepareChatgptWeb } from './chatgpt-web-runtime.mjs';
 
-const actions = new Set(['prepare', 'login', 'start', 'pause', 'remove', 'refresh-models', 'tools', 'check-tunnel']);
+const actions = new Set(['prepare', 'login', 'continue-login', 'cancel-login', 'start', 'pause', 'remove', 'refresh-models', 'tools', 'check-tunnel']);
 
 export function createChatgptWebManager({ root, dataDir, log = () => {}, spawnChild = spawn, prepare = prepareChatgptWeb }) {
   const home = path.join(dataDir, 'chatgpt-web');
@@ -14,7 +14,7 @@ export function createChatgptWebManager({ root, dataDir, log = () => {}, spawnCh
   let phase = 'idle', message = '', error = '', snapshot = {};
   const pending = new Map();
   const installed = () => existsSync(bunPath(root)) && existsSync(path.join(root, 'vendor/chatgpt-web/node_modules/.codebridge-lock'));
-  const status = () => ({ ...snapshot, phase, message, error, busy: working, enabled, runtimeInstalled: installed() });
+  const status = () => ({ ...snapshot, phase, message, error, busy: working, enabled, loginControlsAvailable: true, runtimeInstalled: installed() });
   async function savePreference(value) {
     enabled = value;
     await mkdir(home, { recursive: true, mode: 0o700 });
@@ -56,6 +56,7 @@ export function createChatgptWebManager({ root, dataDir, log = () => {}, spawnCh
           try { event = JSON.parse(line.slice(15)); } catch { return; }
           if (event.event === 'ready') { snapshot = event.status; ready = true; clearTimeout(timeout); resolve(); }
           if (event.event === 'progress') message = event.message;
+          if (event.event === 'login-stage') { phase = event.phase; message = event.message; }
           if (event.id && pending.has(event.id)) {
             const item = pending.get(event.id); pending.delete(event.id); clearTimeout(item.timeout);
             if (event.error) item.reject(new Error(event.error));
@@ -77,6 +78,13 @@ export function createChatgptWebManager({ root, dataDir, log = () => {}, spawnCh
   }
   function run(action, body = {}) {
     if (!actions.has(action)) throw new Error('Thao tác ChatGPT Web không hợp lệ.');
+    if (action === 'continue-login' || action === 'cancel-login') {
+      if (!working || !['logging_in', 'verifying'].includes(phase)) throw new Error('Không có phiên đăng nhập đang chờ.');
+      if (action === 'continue-login') { phase = 'verifying'; message = 'Đang đóng cửa sổ đăng nhập riêng và xác minh phiên…'; }
+      else message = 'Đang hủy đăng nhập…';
+      void request(action).catch(failure => { error = failure.message; });
+      return { ok: true };
+    }
     if (working || closing) throw new Error('Đang xử lý thao tác ChatGPT Web. Hãy chờ hoàn tất.');
     working = true; error = ''; message = '';
     phase = ({ prepare: 'preparing', login: 'logging_in', start: 'starting', pause: 'stopping', remove: 'stopping', tools: 'starting' })[action] || 'checking';

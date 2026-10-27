@@ -4,15 +4,19 @@ import { createInterface } from 'node:readline';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { defaultConfig, loadConfig, saveConfig, getConfigPath, getConfigDir, type AppConfig } from '../vendor/chatgpt-web/src/config';
-import { browserLoginStateExists, loginToChatGpt, inspectBrowserLoginCapabilities } from '../vendor/chatgpt-web/src/browser-login';
+import { browserLoginStateExists, inspectBrowserLoginCapabilities } from '../vendor/chatgpt-web/src/browser-login';
 import { installCodexIntegration, inspectCodexIntegration, deactivateCodexIntegration, uninstallCodexIntegration } from '../vendor/chatgpt-web/src/codex-integration';
 import { availableChatGptWebModelRoutes } from '../vendor/chatgpt-web/src/chatgpt-web-models';
 import { startServer } from '../vendor/chatgpt-web/src/server';
 import { createTunnelConfig, installTunnelClient, installRuntimeKeyBytes, connectTunnel, stopTunnel, tunnelStatus, waitForTunnelReady } from '../vendor/chatgpt-web/src/tunnel';
+import { loginToChatGpt } from './chatgpt-web-login';
 
 let config: AppConfig = existsSync(getConfigPath()) ? loadConfig() : defaultConfig();
 let server: ReturnType<typeof startServer> | undefined;
 let busy = false;
+let loginController: AbortController | undefined;
+let continueLogin: (() => void) | undefined;
+let loginDone: Promise<void> | undefined;
 config.port = Number(process.env.BRIDGE_WEB_PORT || '3216');
 if (!Number.isInteger(config.port) || config.port < 1024 || config.port > 65535) throw new Error('BRIDGE_WEB_PORT phải là cổng từ 1024 đến 65535.');
 if (process.env.BRIDGE_WEB_CHROME) config.chromeExecutablePath = process.env.BRIDGE_WEB_CHROME;
@@ -85,12 +89,33 @@ async function action(name: string, body: Record<string, unknown>) {
     case 'login': {
       await assertIdle();
       if (server) throw new Error('Tạm dừng model Web trước khi đăng nhập lại.');
-      progress('Đăng nhập trong cửa sổ Chrome vừa mở. Khi đã thấy ô chat, đóng toàn bộ cửa sổ Chrome riêng đó để Code Bridge xác minh phiên.');
-      const login = await loginToChatGpt(config, { timeoutMs: 120000 });
-      config = { ...config, solAvailable: login.solAvailable, extraHighAvailable: login.extraHighAvailable, proAvailable: login.proAvailable };
-      saveConfig(config);
-      return status();
+      loginController = new AbortController();
+      const signal = loginController.signal;
+      const continuation = new Promise<void>(resolve => { continueLogin = resolve; });
+      let finish!: () => void;
+      loginDone = new Promise<void>(resolve => { finish = resolve; });
+      const timeout = setTimeout(() => loginController?.abort(new Error('Đăng nhập đã quá 10 phút. Bấm Đăng nhập ChatGPT để thử lại.')), 10 * 60000);
+      progress('Đang mở cửa sổ Chrome riêng để đăng nhập ChatGPT…');
+      try {
+        const login = await loginToChatGpt(config, {
+          signal, continuation,
+          onReady: () => emit({ event: 'login-stage', phase: 'logging_in', message: 'Đăng nhập ChatGPT trong cửa sổ Chrome riêng. Khi thấy ô chat, quay lại đây bấm Đã đăng nhập, tiếp tục.' }),
+          onVerifying: () => { continueLogin = undefined; emit({ event: 'login-stage', phase: 'verifying', message: 'Đang xác minh phiên và nhận diện model. Giữ các cửa sổ kiểm tra ChatGPT mở đến khi hoàn tất.' }); }
+        });
+        config = { ...config, solAvailable: login.solAvailable, extraHighAvailable: login.extraHighAvailable, proAvailable: login.proAvailable };
+        saveConfig(config);
+        return status();
+      } catch (error) { if (signal.aborted) throw signal.reason; throw error; }
+      finally { clearTimeout(timeout); loginController = undefined; continueLogin = undefined; finish(); loginDone = undefined; }
     }
+    case 'continue-login':
+      if (!continueLogin) throw new Error('Không có cửa sổ đăng nhập đang chờ tiếp tục.');
+      continueLogin(); continueLogin = undefined;
+      return {};
+    case 'cancel-login':
+      if (!loginController) throw new Error('Không có phiên đăng nhập đang chờ.');
+      loginController.abort(new Error('Đã hủy đăng nhập. Có thể bấm Đăng nhập ChatGPT để thử lại.'));
+      return {};
     case 'refresh-models': {
       await assertIdle();
       Object.assign(config, await inspectBrowserLoginCapabilities(config));
@@ -104,6 +129,8 @@ async function action(name: string, body: Record<string, unknown>) {
       await stopServer();
       return status();
     case 'shutdown':
+      loginController?.abort(new Error('Code Bridge đang đóng.'));
+      if (loginDone) await loginDone;
       deactivateCodexIntegration({ forRuntimeRecovery: true });
       await stopServer(true);
       return status();
@@ -137,12 +164,13 @@ const reader = createInterface({ input: process.stdin });
 reader.on('line', async line => {
   let message: { id: number; action: string; body?: Record<string, unknown> };
   try { message = JSON.parse(line); } catch { return; }
-  if (busy && message.action !== 'status') { emit({ id: message.id, error: 'Đang xử lý thao tác ChatGPT Web. Hãy chờ hoàn tất.' }); return; }
-  if (message.action !== 'status') busy = true;
+  const control = ['status', 'continue-login', 'cancel-login', 'shutdown'].includes(message.action);
+  if (busy && !control) { emit({ id: message.id, error: 'Đang xử lý thao tác ChatGPT Web. Hãy chờ hoàn tất.' }); return; }
+  if (!control) busy = true;
   try { emit({ id: message.id, result: await action(message.action, message.body || {}) }); }
   catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     emit({ id: message.id, error: detail.replace(/sk-[A-Za-z0-9_-]+/g, '[key]') });
-  } finally { if (message.action !== 'status') busy = false; }
+  } finally { if (!control) busy = false; }
 });
 reader.once('close', () => { void action('shutdown', {}).finally(() => process.exit()); });

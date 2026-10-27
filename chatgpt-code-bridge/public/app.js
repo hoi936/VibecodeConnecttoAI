@@ -340,7 +340,7 @@ function renderVscode() {
 }
 function renderCodexWebStatus(web) {
   if (!web) return;
-  const labels = { idle: 'Chưa kết nối', preparing: 'Đang chuẩn bị', logging_in: 'Đang đăng nhập', starting: 'Đang kết nối', running: 'Đang chạy', paused: 'Đã tạm dừng', stopping: 'Đang dừng', checking: 'Đang kiểm tra', error: 'Cần kiểm tra' };
+  const labels = { idle: 'Chưa kết nối', preparing: 'Đang chuẩn bị', logging_in: 'Đang đăng nhập', verifying: 'Đang xác minh phiên', starting: 'Đang kết nối', running: 'Đang chạy', paused: 'Đã tạm dừng', stopping: 'Đang dừng', checking: 'Đang kiểm tra', error: 'Cần kiểm tra' };
   $('vsc-web-phase').textContent = labels[web.phase] || 'Chưa kết nối';
   $('vsc-web-status').textContent = web.message || (web.running ? `Đã kết nối ${web.models?.length || 0} model Web với Codex.` : web.loggedIn ? 'Đã lưu phiên ChatGPT. Bấm Kết nối lại để dùng model Web.' : 'Bấm Đăng nhập ChatGPT. Lần đầu Code Bridge sẽ tự tải thành phần cần thiết.');
   $('vsc-web-error').hidden = !web.error;
@@ -355,6 +355,10 @@ function renderCodexWebStatus(web) {
   $('vsc-web-start').textContent = web.installed ? 'Kết nối lại' : 'Thêm model vào Codex';
   $('vsc-web-pause').disabled = web.busy || !web.running;
   $('vsc-web-refresh').disabled = web.busy || !web.loggedIn;
+  $('vsc-web-login-controls').hidden = !web.loginControlsAvailable || !web.busy || !['logging_in', 'verifying'].includes(web.phase);
+  if (web.busy && web.phase === 'logging_in' && !web.loginControlsAvailable) $('vsc-web-status').textContent = 'Phiên Code Bridge đang chạy vẫn dùng luồng đăng nhập cũ. Khởi động lại Code Bridge để bật nút Đã đăng nhập, tiếp tục và Hủy đăng nhập.';
+  $('vsc-web-continue').disabled = web.phase !== 'logging_in';
+  $('vsc-web-cancel').disabled = !web.busy;
   $('vsc-web-remove').disabled = web.busy || !web.installed;
   $('vsc-web-tools-connect').disabled = web.busy || !web.loggedIn;
   $('vsc-web-tools-status').textContent = web.mode === 'full' && web.tunnelConfigured ? (web.running ? 'Tunnel đã bật · kiểm tra app trong ChatGPT' : 'Đã lưu · đang tạm dừng') : 'Chưa bật';
@@ -365,7 +369,7 @@ $('vsc-check-web').onclick = protect(async () => {
   state.chatgptWebMode = await api('/api/chatgpt-web/status');
   renderCodexWebStatus(state.chatgptWebMode);
 });
-for (const [id, action] of [['vsc-web-login', 'login'], ['vsc-web-start', 'start'], ['vsc-web-pause', 'pause'], ['vsc-web-remove', 'remove'], ['vsc-web-refresh', 'refresh-models']]) {
+for (const [id, action] of [['vsc-web-login', 'login'], ['vsc-web-start', 'start'], ['vsc-web-pause', 'pause'], ['vsc-web-remove', 'remove'], ['vsc-web-refresh', 'refresh-models'], ['vsc-web-continue', 'continue-login'], ['vsc-web-cancel', 'cancel-login']]) {
   $(id).onclick = protect(async () => { await api(`/api/chatgpt-web/${action}`, {}); await refresh(); });
 }
 $('vsc-web-tools-form').onsubmit = protect(async () => {

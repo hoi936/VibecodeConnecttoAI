@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
@@ -31,6 +31,36 @@ test('real embedded worker reports readiness, rejects unauthenticated start and 
   } finally {
     await manager.close();
     if (before === undefined) delete process.env.BRIDGE_CODEX_HOME; else process.env.BRIDGE_CODEX_HOME = before;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('cancel is accepted while the embedded worker is waiting for browser login and allows a retry', { skip: process.platform !== 'linux' || !existsSync(bunPath(root)), timeout: 40000 }, async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'codebridge-web-cancel-'));
+  const fakeChrome = path.join(directory, 'chrome');
+  await writeFile(fakeChrome, '#!/bin/sh\nexec sleep 60\n', { mode: 0o700 });
+  const beforeHome = process.env.BRIDGE_CODEX_HOME, beforeChrome = process.env.BRIDGE_WEB_CHROME;
+  process.env.BRIDGE_CODEX_HOME = path.join(directory, 'codex');
+  process.env.BRIDGE_WEB_CHROME = fakeChrome;
+  const manager = createChatgptWebManager({ root, dataDir: directory });
+  async function waitFor(predicate) {
+    const deadline = Date.now() + 15000;
+    while (!predicate(manager.status()) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 30));
+    assert.ok(predicate(manager.status()), JSON.stringify(manager.status()));
+  }
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      manager.run('login');
+      await waitFor(state => state.busy && state.message.includes('quay lại đây'));
+      manager.run('cancel-login');
+      await waitFor(state => !state.busy);
+      assert.match(manager.status().error, /hủy đăng nhập/);
+      assert.equal(manager.status().loggedIn, false);
+    }
+  } finally {
+    await manager.close();
+    if (beforeHome === undefined) delete process.env.BRIDGE_CODEX_HOME; else process.env.BRIDGE_CODEX_HOME = beforeHome;
+    if (beforeChrome === undefined) delete process.env.BRIDGE_WEB_CHROME; else process.env.BRIDGE_WEB_CHROME = beforeChrome;
     await rm(directory, { recursive: true, force: true });
   }
 });

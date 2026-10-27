@@ -10,7 +10,7 @@ Bản dùng trên máy khác: [Windows portable](docs/PHAN_PHOI_WINDOWS.md) và 
 
 Trong VS Code, Code Bridge hỗ trợ **đăng nhập ChatGPT Web và thêm model (Web) vào Codex ngay trong ứng dụng**, cùng kết nối MCP cho Copilot/Codex. Xem [hướng dẫn VS Code / Codex](docs/KET_NOI_VSCODE.md). Với Google Antigravity, xem [hướng dẫn kết nối MCP](docs/KET_NOI_ANTIGRAVITY.md).
 
-Mở **VS Code / Codex** → **Đăng nhập ChatGPT** → đăng nhập trong Chrome riêng rồi đóng cửa sổ đó → **Thêm model vào Codex**. Sau khi mở lại Codex, chọn model **(Web)**. Muốn sửa file/chạy terminal bằng model Web, hoàn tất phần Tunnel công cụ trên cùng trang. **Tạm dừng** khôi phục cấu hình Codex trước đó; **Kết nối lại** dùng phiên đã lưu. Engine MIT được tích hợp tại `vendor/chatgpt-web`, không cần ứng dụng khác. Để chuẩn bị runtime từ terminal khi phát triển: `npm run setup:chatgpt-web`.
+Mở **VS Code / Codex** → **Đăng nhập ChatGPT** → đăng nhập trong Chrome riêng rồi bấm **Đã đăng nhập, tiếp tục** → **Thêm model vào Codex**. Sau khi mở lại Codex, chọn model **(Web)**. Muốn sửa file/chạy terminal bằng model Web, hoàn tất phần Tunnel công cụ trên cùng trang. **Tạm dừng** khôi phục cấu hình Codex trước đó; **Kết nối lại** dùng phiên đã lưu. Engine MIT được tích hợp tại `vendor/chatgpt-web`, không cần ứng dụng khác. Để chuẩn bị runtime từ terminal khi phát triển: `npm run setup:chatgpt-web`.
 
 Muốn chạy trên máy Windows khác, dùng [bản Windows x64 portable](docs/PHAN_PHOI_WINDOWS.md): giải nén ZIP, mở `CodeBridge.exe`. Gói này đã kèm Node, Filesystem MCP, tunnel-client và cloudflared; máy nhận không cần cài Node hoặc Git.
 

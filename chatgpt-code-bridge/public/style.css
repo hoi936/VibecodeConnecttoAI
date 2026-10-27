@@ -2541,6 +2541,7 @@ body[data-view="vscode"] {
 }
 
 .web-model-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0 16px; }
+.web-model-actions[hidden] { display: none; }
 #vscode button:disabled { opacity: .45; cursor: not-allowed; }
 .web-model-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 .web-model-chip { display: inline-flex; padding: 8px 12px; border: 1px solid rgba(96,165,250,.25); border-radius: 12px; background: rgba(59,130,246,.08); color: var(--text-primary); font-size: .85rem; }

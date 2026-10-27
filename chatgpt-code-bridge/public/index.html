@@ -687,7 +687,7 @@
         </div>
         <div class="vscode-section web-model-card">
           <div class="section-heading"><div><span class="eyebrow">01 · TÀI KHOẢN CHATGPT</span><h2>Đăng nhập và thêm model Web</h2></div><span id="vsc-web-phase" class="choice-status">Chưa thiết lập</span></div>
-          <p>Code Bridge mở một cửa sổ Chrome riêng để anh đăng nhập. Khi đã thấy ô chat ChatGPT, đóng toàn bộ cửa sổ Chrome riêng đó để ứng dụng xác minh và lưu phiên. Phiên này dùng lại được khi mở Code Bridge lần sau.</p>
+          <p>Code Bridge mở một cửa sổ Chrome riêng. Đăng nhập ChatGPT trong cửa sổ đó; khi đã thấy ô chat, quay lại đây bấm <strong>Đã đăng nhập, tiếp tục</strong> để xác minh và lưu phiên. Phiên này dùng lại được khi mở Code Bridge lần sau.</p>
           <p class="muted">Tính năng điều khiển giao diện ChatGPT Web bằng engine mã nguồn mở tích hợp trong Code Bridge. Model và hạn mức phụ thuộc tài khoản ChatGPT; giao diện Web thay đổi có thể cần cập nhật engine.</p>
           <div class="web-model-actions">
             <button id="vsc-web-login">Đăng nhập ChatGPT</button>
@@ -695,6 +695,10 @@
             <button id="vsc-web-pause" class="secondary">Tạm dừng</button>
             <button id="vsc-web-refresh" class="secondary">Làm mới danh sách model</button>
             <button id="vsc-check-web" class="secondary">Kiểm tra lại</button>
+          </div>
+          <div id="vsc-web-login-controls" class="web-model-actions" hidden>
+            <button id="vsc-web-continue">Đã đăng nhập, tiếp tục</button>
+            <button id="vsc-web-cancel" class="secondary">Hủy đăng nhập</button>
           </div>
           <p id="vsc-web-status" role="status" aria-live="polite">Đang kiểm tra…</p>
           <p id="vsc-web-error" class="web-model-error" role="alert" hidden></p>
