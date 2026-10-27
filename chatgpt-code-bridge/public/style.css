@@ -2540,6 +2540,18 @@ body[data-view="vscode"] {
   border-color: rgba(59, 130, 246, 0.25);
 }
 
+.web-model-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0 16px; }
+#vscode button:disabled { opacity: .45; cursor: not-allowed; }
+.web-model-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.web-model-chip { display: inline-flex; padding: 8px 12px; border: 1px solid rgba(96,165,250,.25); border-radius: 12px; background: rgba(59,130,246,.08); color: var(--text-primary); font-size: .85rem; }
+.web-model-error { padding: 14px 18px; border-radius: 12px; background: rgba(239,68,68,.12); color: #f87171; overflow-wrap: anywhere; }
+.web-model-advanced { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+.web-model-advanced summary { cursor: pointer; font-weight: 600; }
+.web-model-card input { width: 100%; box-sizing: border-box; }
+.web-model-card label { display: block; margin: 18px 0 8px; }
+.web-model-steps { padding-left: 22px; line-height: 1.9; }
+.web-model-steps li { margin: 12px 0; }
+
 /* ── MODEL SELECTOR ────────────────────────────────────────────────────────── */
 .vsc-model-selector {
   background: #0d1322;

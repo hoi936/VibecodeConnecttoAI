@@ -138,7 +138,11 @@ test('MCP HTTP, workspace boundaries, permissions and local UI', { timeout: 1200
     const approval = remoteStatus.gemini.pending[0]; assert.ok(approval);
     assert.equal((await post('/api/gemini/approve', { id: approval.id })).status, 200);
     const callback = await fetch(gateway + new URL(response.headers.get('location')).pathname, { redirect: 'manual' });
-    const code = new URL(callback.headers.get('location')).searchParams.get('code');
+    assert.equal(callback.status, 200);
+    const callbackHtml = await callback.text();
+    const callbackUrl = callbackHtml.match(/<a href="([^"]+)"/)?.[1]?.replaceAll('&amp;', '&');
+    assert.ok(callbackUrl, 'Gemini completion page must contain the OAuth callback');
+    const code = new URL(callbackUrl).searchParams.get('code');
     const tokenResponse = await fetch(gateway + '/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: verifier, client_id: registration.client_id, redirect_uri: registration.redirect_uris[0] }) });
     assert.equal(tokenResponse.status, 200); const token = await tokenResponse.json();
     await post('/api/permissions', { allowWrites: true });

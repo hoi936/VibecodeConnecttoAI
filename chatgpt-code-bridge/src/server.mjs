@@ -16,6 +16,7 @@ import { createQuickTunnelManager } from './quick-tunnel-manager.mjs';
 import { canUseTerminal, createTerminalRunner, terminalTool } from './terminal.mjs';
 import { createVscodeProxy } from './vscode-proxy.mjs';
 import { codexWebStatus } from './codex-web-status.mjs';
+import { createChatgptWebManager } from './chatgpt-web-manager.mjs';
 import { createAntigravityProxy } from './antigravity-proxy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -88,6 +89,7 @@ function tunnelPath() { return path.join(root, 'runtime', process.platform === '
 const tunnels = createTunnelManager({ binary: tunnelPath(), origin, cwd: root, profiles: config.chatgptProfiles, log });
 const legacy = createLegacyBridge(process.env.BRIDGE_LEGACY_URL, origin);
 const vscodeProxy = createVscodeProxy({ getStatus: () => ({ workspace: config.workspace }) });
+const chatgptWeb = createChatgptWebManager({ root, dataDir, log });
 const antigravityProxy = createAntigravityProxy({ getStatus: () => ({ workspace: config.workspace }), origin });
 await legacy.poll();
 const remotes = Object.fromEntries(Object.entries({ gemini: ['GEMINI_GATEWAY_PORT', 3212], claude: ['CLAUDE_GATEWAY_PORT', 3214], grok: ['GROK_GATEWAY_PORT', 3215] }).map(([providerName, [envName, defaultPort]]) => [providerName, createRemoteAccess({ getContext: () => ({ workspace: config.workspace, allowWrites: config.allowWrites, allowTerminal: terminalEnabled }), handleMcp, log, providerName, port: Number(process.env[envName] || defaultPort), stateFile: path.join(dataDir, `oauth-${providerName}.json`) })]));
@@ -136,9 +138,16 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.get('/health', (req, res) => res.json({ ok: true, mcp: !!client, tunnel: connections().find(p => p.provider === 'chatgpt' && p.state === 'ready') ? 'ready' : 'stopped' }));
-app.get('/api/status', async (req, res) => res.json({ ...config, connectionMode: 'both', terminalEnabled, csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp`, vscodeMode: await vscodeProxy.status(origin), codexWebMode: await codexWebStatus(), antigravityMode: await antigravityProxy.status() }));
+app.get('/api/status', async (req, res) => res.json({ ...config, connectionMode: 'both', terminalEnabled, csrf, tools: availableTools(), events, tunnel: { state: tunnels.list()[0]?.state || 'stopped', error: tunnels.list()[0]?.error || '', installed: existsSync(tunnelPath()) }, ...Object.fromEntries(Object.entries(remotes).map(([name, remote]) => [name, remote.status()])), quickTunnels: quickTunnels.status(), connections: connections(), summary: connectionSummary(), endpoint: `${origin}/mcp`, vscodeMode: await vscodeProxy.status(origin), chatgptWebMode: chatgptWeb.status(), antigravityMode: await antigravityProxy.status() }));
 app.get('/api/vscode/status', async (req, res) => res.json(await vscodeProxy.status(origin)));
 app.get('/api/vscode/web-status', async (req, res) => res.json(await codexWebStatus()));
+app.get('/api/chatgpt-web/status', (req, res) => res.json(chatgptWeb.status()));
+app.post('/api/chatgpt-web/:action', (req, res) => {
+  if (req.params.action === 'tools' && tunnels.list().some(profile => profile.tunnelId === req.body.tunnelId)) {
+    return res.status(400).json({ error: 'Tunnel này đang được dùng cho kết nối ChatGPT Web → Code Bridge. Hãy tạo Tunnel riêng cho model Web trong Codex để hai tiến trình không tranh nhau kết nối.' });
+  }
+  res.json(chatgptWeb.run(req.params.action, req.body));
+});
 app.post('/api/vscode/configure', async (req, res) => res.json(await vscodeProxy.configureWorkspace(origin)));
 app.get('/api/antigravity/status', async (req, res) => res.json(await antigravityProxy.status()));
 app.post('/api/antigravity/configure', async (req, res) => res.json(await antigravityProxy.configureWorkspace()));
@@ -281,6 +290,7 @@ async function restoreSavedRemotes() {
 }
 await restoreSavedRemotes();
 const httpServer = app.listen(port, '127.0.0.1', () => console.log(`Code Bridge: ${origin}\nMCP: ${origin}/mcp\nWorkspace: ${config.workspace}`));
-async function shutdown() { clearInterval(healthTimer); terminalRunner.stopAll(); await tunnels.close(); await quickTunnels.close(); await Promise.all(Object.values(remotes).map(remote => remote.close())); await toolQueue; await client?.close(); httpServer.close(); }
+void chatgptWeb.restore();
+async function shutdown() { clearInterval(healthTimer); terminalRunner.stopAll(); await chatgptWeb.close(); await tunnels.close(); await quickTunnels.close(); await Promise.all(Object.values(remotes).map(remote => remote.close())); await toolQueue; await client?.close(); httpServer.close(); }
 process.on('SIGINT', () => shutdown().then(() => process.exit(0)));
 process.on('SIGTERM', () => shutdown().then(() => process.exit(0)));

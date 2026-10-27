@@ -336,23 +336,43 @@ function renderVscode() {
   const configured = $('vsc-config-status'); if (configured) configured.textContent = vs.isConfigured ? '● Đã thêm vào .vscode/mcp.json' : 'Chưa thêm vào dự án';
   const mcp = $('vsc-mcp-snippet'); if (mcp) mcp.textContent = vs.vscodeSnippet;
   const codex = $('vsc-codex-snippet'); if (codex) codex.textContent = vs.codexSnippet;
-  renderCodexWebStatus(state?.codexWebMode);
+  renderCodexWebStatus(state?.chatgptWebMode);
 }
 function renderCodexWebStatus(web) {
-  const labels = {
-    ready: `● Đã thấy ${web?.modelCount || 0} model ChatGPT Web. Khởi động lại Codex nếu menu chưa cập nhật.`,
-    unavailable: 'Cầu nối đã được cấu hình nhưng chưa phản hồi. Hãy mở ứng dụng cầu nối và kiểm tra đăng nhập ChatGPT Web.',
-    no_web_models: 'Cầu nối đang chạy nhưng chưa công bố model ChatGPT Web. Kiểm tra trạng thái đăng nhập và cài model trong ứng dụng cầu nối.',
-    other_provider: 'Codex đang dùng một nhà cung cấp model khác. Đừng ghi đè cấu hình này khi chưa kiểm tra.',
-    invalid_url: 'Giá trị openai_base_url trong cấu hình Codex không hợp lệ.',
-    not_configured: 'Chưa thấy cầu nối model Web trong cấu hình Codex.'
-  };
-  const label = $('vsc-web-status'); if (label) label.textContent = labels[web?.state] || labels.not_configured;
-  const models = $('vsc-web-models'); if (models) models.textContent = web?.models?.length ? `Model: ${web.models.join(', ')}` : '';
+  if (!web) return;
+  const labels = { idle: 'Chưa kết nối', preparing: 'Đang chuẩn bị', logging_in: 'Đang đăng nhập', starting: 'Đang kết nối', running: 'Đang chạy', paused: 'Đã tạm dừng', stopping: 'Đang dừng', checking: 'Đang kiểm tra', error: 'Cần kiểm tra' };
+  $('vsc-web-phase').textContent = labels[web.phase] || 'Chưa kết nối';
+  $('vsc-web-status').textContent = web.message || (web.running ? `Đã kết nối ${web.models?.length || 0} model Web với Codex.` : web.loggedIn ? 'Đã lưu phiên ChatGPT. Bấm Kết nối lại để dùng model Web.' : 'Bấm Đăng nhập ChatGPT. Lần đầu Code Bridge sẽ tự tải thành phần cần thiết.');
+  $('vsc-web-error').hidden = !web.error;
+  $('vsc-web-error').textContent = web.error || '';
+  $('vsc-web-browser').textContent = web.browserAvailable === false ? 'Chưa tìm thấy Google Chrome. Cài Chrome trên máy rồi khởi động lại Code Bridge.' : '';
+  $('vsc-web-config').textContent = web.configPath ? `Cấu hình Codex: ${web.configPath}${web.endpoint ? ` · Model endpoint: ${web.endpoint}` : ''}` : '';
+  const models = $('vsc-web-models'); models.replaceChildren();
+  for (const model of web.models || []) models.append(node('span', model.name || model.id, 'web-model-chip'));
+  $('vsc-web-login').disabled = web.busy || web.running;
+  $('vsc-web-login').textContent = web.loggedIn ? 'Đăng nhập lại ChatGPT' : 'Đăng nhập ChatGPT';
+  $('vsc-web-start').disabled = web.busy || !web.loggedIn || web.running;
+  $('vsc-web-start').textContent = web.installed ? 'Kết nối lại' : 'Thêm model vào Codex';
+  $('vsc-web-pause').disabled = web.busy || !web.running;
+  $('vsc-web-refresh').disabled = web.busy || !web.loggedIn;
+  $('vsc-web-remove').disabled = web.busy || !web.installed;
+  $('vsc-web-tools-connect').disabled = web.busy || !web.loggedIn;
+  $('vsc-web-tools-status').textContent = web.mode === 'full' && web.tunnelConfigured ? (web.running ? 'Tunnel đã bật · kiểm tra app trong ChatGPT' : 'Đã lưu · đang tạm dừng') : 'Chưa bật';
+  $('vsc-web-restart').hidden = !web.active;
+  const badge = $('vscode-nav-badge'); if (badge) badge.textContent = web.running ? 'WEB' : 'MCP';
 }
 $('vsc-check-web').onclick = protect(async () => {
-  state.codexWebMode = await api('/api/vscode/web-status');
-  renderCodexWebStatus(state.codexWebMode);
+  state.chatgptWebMode = await api('/api/chatgpt-web/status');
+  renderCodexWebStatus(state.chatgptWebMode);
+});
+for (const [id, action] of [['vsc-web-login', 'login'], ['vsc-web-start', 'start'], ['vsc-web-pause', 'pause'], ['vsc-web-remove', 'remove'], ['vsc-web-refresh', 'refresh-models']]) {
+  $(id).onclick = protect(async () => { await api(`/api/chatgpt-web/${action}`, {}); await refresh(); });
+}
+$('vsc-web-tools-form').onsubmit = protect(async () => {
+  const apiKey = $('vsc-web-key').value.trim();
+  await api('/api/chatgpt-web/tools', { tunnelId: $('vsc-web-tunnel').value.trim(), apiKey });
+  $('vsc-web-key').value = '';
+  await refresh();
 });
 $('vsc-auto-configure').onclick = protect(async () => {
   await api('/api/vscode/configure', {});

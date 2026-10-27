@@ -7,6 +7,8 @@
     "start": "node src/server.mjs",
     "setup": "node scripts/setup.mjs",
     "setup:tunnel": "node scripts/setup-tunnel.mjs",
+    "setup:chatgpt-web": "node scripts/setup-chatgpt-web.mjs",
+    "test:chatgpt-web": "node scripts/test-chatgpt-web.mjs",
     "package:win": "node scripts/package-windows.mjs",
     "package:mac": "node scripts/package-macos.mjs",
     "gemini:tunnel": "node scripts/gemini-tunnel.mjs",
@@ -17,6 +19,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "fflate": "0.8.2"
   }
 }

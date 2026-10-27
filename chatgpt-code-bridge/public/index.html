@@ -194,7 +194,7 @@
             <div class="choice-heading">
               <span class="choice-eyebrow">KHÔNG GIAN 06 · MỚI</span>
               <h2>VS Code / Codex<span aria-hidden="true">↗</span></h2>
-              <p>Đưa công cụ dự án vào chat Agent của VS Code hoặc Codex. Chọn model trong IDE.</p>
+              <p>Đăng nhập ChatGPT Web, thêm model vào Codex và kết nối công cụ dự án trong IDE.</p>
             </div>
             <div class="connection-art" aria-hidden="true">
               <span class="art-chat">⬡<small>VS Code</small></span>
@@ -680,10 +680,44 @@
             <span class="vscode-hero-icon">⬡</span>
             <div>
               <span class="eyebrow">CODE BRIDGE · IDE</span>
-              <h1>Dùng công cụ Code Bridge<br>trong <em>VS Code</em></h1>
-              <p>Kết nối VS Code hoặc Codex với MCP cục bộ để agent đọc và sửa dự án bạn chọn. Model chat và tài khoản được chọn trong extension của IDE.</p>
+              <h1>ChatGPT Web<br>ngay trong <em>Codex</em></h1>
+              <p>Đăng nhập ChatGPT trong Code Bridge, thêm model Web vào menu Codex và quản lý kết nối tại đây.</p>
             </div>
           </div>
+        </div>
+        <div class="vscode-section web-model-card">
+          <div class="section-heading"><div><span class="eyebrow">01 · TÀI KHOẢN CHATGPT</span><h2>Đăng nhập và thêm model Web</h2></div><span id="vsc-web-phase" class="choice-status">Chưa thiết lập</span></div>
+          <p>Code Bridge mở một cửa sổ Chrome riêng để anh đăng nhập. Khi đã thấy ô chat ChatGPT, đóng toàn bộ cửa sổ Chrome riêng đó để ứng dụng xác minh và lưu phiên. Phiên này dùng lại được khi mở Code Bridge lần sau.</p>
+          <p class="muted">Tính năng điều khiển giao diện ChatGPT Web bằng engine mã nguồn mở tích hợp trong Code Bridge. Model và hạn mức phụ thuộc tài khoản ChatGPT; giao diện Web thay đổi có thể cần cập nhật engine.</p>
+          <div class="web-model-actions">
+            <button id="vsc-web-login">Đăng nhập ChatGPT</button>
+            <button id="vsc-web-start">Thêm model vào Codex</button>
+            <button id="vsc-web-pause" class="secondary">Tạm dừng</button>
+            <button id="vsc-web-refresh" class="secondary">Làm mới danh sách model</button>
+            <button id="vsc-check-web" class="secondary">Kiểm tra lại</button>
+          </div>
+          <p id="vsc-web-status" role="status" aria-live="polite">Đang kiểm tra…</p>
+          <p id="vsc-web-error" class="web-model-error" role="alert" hidden></p>
+          <p id="vsc-web-browser" class="muted"></p>
+          <div id="vsc-web-models" class="web-model-list"></div>
+          <p id="vsc-web-restart" hidden>Mở lại phiên Codex hoặc chạy <strong>Developer: Reload Window</strong> trong VS Code, rồi chọn model có hậu tố <strong>(Web)</strong>. Lần đầu chưa cấp tunnel công cụ, model chỉ trò chuyện.</p>
+          <details class="web-model-advanced"><summary>Quản lý cấu hình Codex</summary><p id="vsc-web-config" class="muted"></p><p>Tạm dừng hoặc gỡ tích hợp sẽ khôi phục đường kết nối Codex trước đó. Phiên đăng nhập ChatGPT vẫn được giữ trong dữ liệu Code Bridge.</p><button id="vsc-web-remove" class="secondary small">Gỡ model Web khỏi Codex</button></details>
+        </div>
+        <div class="vscode-section web-model-card">
+          <div class="section-heading"><div><span class="eyebrow">02 · FILE VÀ TERMINAL TRONG CODEX</span><h2>Cho model Web dùng công cụ lập trình</h2></div><span id="vsc-web-tools-status" class="choice-status">Chưa bật</span></div>
+          <p>Để model Web sửa file và chạy lệnh trong phiên Codex, tạo một <strong>Tunnel riêng</strong> trên OpenAI Platform. Nhập thông tin dưới đây; Code Bridge sẽ chuẩn bị và chạy cầu nối công cụ. Quyền thực thi theo cài đặt phê duyệt của Codex.</p>
+          <form id="vsc-web-tools-form">
+            <label for="vsc-web-tunnel">Tunnel ID riêng cho model Web</label><input id="vsc-web-tunnel" placeholder="tunnel_…" autocomplete="off" required pattern="tunnel_[a-f0-9]{32}">
+            <label for="vsc-web-key">Runtime API Key có quyền Tunnels Read + Use</label><input id="vsc-web-key" type="password" autocomplete="off" required>
+            <p class="muted">Khóa được lưu trong dữ liệu riêng trên máy để tự kết nối lại; không chia sẻ thư mục dữ liệu ứng dụng.</p>
+            <p><button id="vsc-web-tools-connect" type="submit">Bật công cụ cho model Web</button></p>
+          </form>
+          <ol class="web-model-steps">
+            <li>Tạo Tunnel và Runtime API Key tại <a href="https://platform.openai.com/settings/organization/tunnels" target="_blank" rel="noopener noreferrer">OpenAI Platform</a>, rồi bấm <strong>Bật công cụ cho model Web</strong>.</li>
+            <li>Trong ChatGPT, bật Developer Mode và thêm ứng dụng kết nối dạng Tunnel. Dùng Tunnel ID ở trên, đặt tên chính xác <strong>Codex Code Bridge</strong>, xác thực <strong>None</strong> và cho phép các công cụ cần dùng.</li>
+            <li>Mở phiên Codex mới, chọn model <strong>(Web)</strong> và yêu cầu đọc một file trước khi thử sửa. Khi Code Bridge báo đã chạy nhưng ChatGPT chưa thấy công cụ, kiểm tra lại app <strong>Codex Code Bridge</strong> trong ChatGPT.</li>
+          </ol>
+          <p class="muted">Không dùng lại Tunnel ID đang chạy ở trang ChatGPT → Code Bridge. Hai kết nối phục vụ hai hướng khác nhau.</p>
         </div>
         <div class="vscode-section">
           <div class="section-heading"><div><span class="eyebrow">BƯỚC 01 · KHỞI ĐỘNG</span><h2>Mở Code Bridge và chọn dự án</h2></div></div>
@@ -699,12 +733,6 @@
           <div class="section-heading"><div><span class="eyebrow">BƯỚC 02B · CODEX EXTENSION</span><h2>Thêm MCP cho Codex trong VS Code</h2></div><button id="vsc-copy-codex" class="secondary small">Sao chép</button></div>
           <p>Đăng nhập extension Codex bằng tài khoản ChatGPT của bạn. Thêm đoạn này vào <code>~/.codex/config.toml</code>, rồi mở lại phiên Codex. Cấu hình này chỉ thêm công cụ Code Bridge.</p>
           <pre class="vsc-snippet" id="vsc-codex-snippet">Đang tải…</pre>
-        </div>
-        <div class="vscode-section">
-          <div class="section-heading"><div><span class="eyebrow">CHATGPT WEB · MODEL TRONG CODEX</span><h2>Kiểm tra model Web</h2></div><button id="vsc-check-web" class="secondary small">Kiểm tra lại</button></div>
-          <p id="vsc-web-status" role="status">Đang kiểm tra…</p>
-          <p id="vsc-web-models" class="muted"></p>
-          <p>Để có model <strong>(Web)</strong> trong menu Codex, cần một cầu nối ChatGPT Web cung cấp <code>/v1/models</code> và <code>/v1/responses</code> rồi cấu hình <code>openai_base_url</code> trong Codex. MCP ở trên không thêm model. Có thể dùng <a href="https://github.com/miuuyy/codex-chatgpt-web" target="_blank" rel="noopener noreferrer">dự án mã nguồn mở codex-chatgpt-web</a> để cài cầu nối, đăng nhập ChatGPT Web và bật tích hợp Codex; sau đó khởi động lại Codex và bấm Kiểm tra lại. Đây là tích hợp bên thứ ba, dùng phiên Web theo quyền tài khoản của bạn.</p>
         </div>
         <div class="vscode-section">
           <div class="section-heading"><div><span class="eyebrow">KIỂM TRA</span><h2>Thử một lệnh đọc file</h2></div></div>

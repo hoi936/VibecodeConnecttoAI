@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { packageChatgptWeb } from './package-chatgpt-web.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const version = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')).version;
@@ -85,6 +86,7 @@ try {
   run('npm', ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--workspaces=false'], { cwd: fsDest });
   await assertNoNativeModules(path.join(stage, 'node_modules'));
   await assertNoNativeModules(path.join(fsDest, 'node_modules'));
+  await packageChatgptWeb(root, stage, 'win32', 'x64');
 
   const runtime = path.join(stage, 'runtime');
   await mkdir(runtime, { recursive: true });

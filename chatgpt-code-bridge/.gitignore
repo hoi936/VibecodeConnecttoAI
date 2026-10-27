@@ -4,3 +4,4 @@ runtime/
 upstream/
 *.log
 dist/
+vendor/chatgpt-web/node_modules/
