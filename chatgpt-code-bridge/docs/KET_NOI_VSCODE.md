@@ -17,6 +17,8 @@ Code Bridge cấp **công cụ MCP** cho chat Agent trong VS Code. Muốn thấy
 3. Trong Code Bridge → **VS Code / Codex** → **Kiểm tra model Web**, bấm **Kiểm tra lại**. Trạng thái sẵn sàng và tên các model `chatgpt-web/...` xác nhận cầu nối đang trả danh sách model. Sau đó chọn model có hậu tố **(Web)** trong Codex.
 4. Để ChatGPT Web thao tác file và terminal trong phiên Codex, làm tiếp hướng dẫn **Full harness / MCP** của chính ứng dụng cầu nối. MCP của Code Bridge là một server công cụ khác và vẫn dùng được riêng; chỉ thấy model Web chưa chứng minh công cụ đã hoạt động.
 
+Nếu chạy Code Bridge trong WSL nhưng Codex VS Code chạy trên Windows, đặt `BRIDGE_CODEX_HOME` đến thư mục `.codex` của Windows khi khởi động Code Bridge, ví dụ `/mnt/c/Users/ADMIN/.codex`. Nếu không, nút kiểm tra sẽ đọc cấu hình Codex của WSL và có thể báo chưa cấu hình dù Windows đã cài cầu nối.
+
 Cơ chế: Codex gọi `/v1/models` và `/v1/responses` trên máy qua `openai_base_url`; cầu nối chuyển yêu cầu Web qua phiên trình duyệt. Trang ChatGPT/Gemini/Claude/Grok của Code Bridge hiện đi chiều **website AI → Code Bridge**. Không đưa cookie hay session token Web vào Code Bridge.
 
 Nếu không thấy công cụ: kiểm tra Code Bridge còn chạy, URL/cổng đúng, MCP server đã được bật trong IDE và workspace đã được chọn. `127.0.0.1` là máy nơi agent chạy; nếu agent chạy trong container/remote SSH, URL localhost của Windows không tự trỏ về Windows.

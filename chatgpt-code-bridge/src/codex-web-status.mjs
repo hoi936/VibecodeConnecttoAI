@@ -11,7 +11,7 @@ function configuredBaseUrl(config) {
   return '';
 }
 
-export async function codexWebStatus({ codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), fetcher = fetch } = {}) {
+export async function codexWebStatus({ codexHome = process.env.BRIDGE_CODEX_HOME || process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), fetcher = fetch } = {}) {
   const result = { state: 'not_configured', modelCount: 0, models: [], baseUrl: '' };
   let config;
   try { config = await readFile(path.join(codexHome, 'config.toml'), 'utf8'); }
